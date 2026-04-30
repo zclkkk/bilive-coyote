@@ -1,0 +1,8 @@
+# Reference
+.temp/
+
+# Dependencies
+node_modules/
+
+# Config
+config.json
