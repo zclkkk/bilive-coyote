@@ -433,10 +433,12 @@ Phase 1 启动时应锁定最新版本，下表为大版本参考：
 | Crate | 用途 | 大版本 |
 |-------|------|--------|
 | `tokio` | 异步运行时 | `1` (features: `full`) |
+| `tokio-util` | 异步工具（`CancellationToken` 优雅退出） | `0.7` |
 | `axum` | HTTP + WebSocket 框架 | `0.8` (features: `ws`) |
 | `tower` | axum 中间件基础设施 | `0.5` |
-| `tower-http` | 常用中间件 (cors, fs) | `0.6` (features: `fs`, `cors`) |
-| `tokio-tungstenite` | 弹幕 WS 客户端 | `0.29` |
+| `tower-http` | 常用中间件 | `0.6` (features: `cors`, `trace`) |
+| `tokio-tungstenite` | 弹幕 WS 客户端（wss） | `0.29` (features: `rustls-tls-webpki-roots`) |
+| `futures-util` | `SinkExt` / `StreamExt` | `0.3` |
 | `serde` | 序列化框架 | `1` (features: `derive`) |
 | `serde_json` | JSON 序列化 | `1` |
 | `bytes` | 零拷贝字节缓冲 | `1` |
@@ -445,14 +447,19 @@ Phase 1 启动时应锁定最新版本，下表为大版本参考：
 | `md-5` | MD5 哈希 | `0.10` |
 | `hex` | Hex 编解码 | `0.4` |
 | `flate2` | Deflate 解压 | `1` |
-| `brotli` | Brotli 解压 | `7` |
+| `brotli` | Brotli 解压 | `8` |
 | `tracing` | 结构化日志 | `0.1` |
 | `tracing-subscriber` | 日志订阅器 | `0.3` (features: `env-filter`) |
 | `thiserror` | 错误类型派生 | `2` |
 | `anyhow` | 应用级错误处理 | `1` |
 | `uuid` | UUID v4 生成 | `1` (features: `v4`) |
-| `chrono` | 时间戳处理 | `0.4` |
-| `rust-embed` | 静态文件嵌入 | `8` |
 | `qrcode` | QR 码 SVG 生成 | `0.14` |
+| `base64` | Base64 编解码（QR SVG data URL） | `0.22` |
+| `mime_guess` | 静态资源 MIME 类型推断 | `2` |
+| `rust-embed` | 静态文件嵌入 | `8` |
 
 > **注意：** 上表为大版本参考，具体 minor/patch 版本在 Phase 1 初始化时通过 `cargo add` 或查看 `crates.io` 锁定最新。
+>
+> **加密依赖说明：** `hmac 0.12` + `sha2 0.10` + `md-5 0.10` 是当前稳定兼容组合。`hmac 0.13` 仍为 rc，`sha2 0.11` / `md-5 0.11` 与之不兼容，暂不升级。
+>
+> **移除的依赖：** `chrono` — 时间戳处理用标准库 `std::time::{Duration, Instant, SystemTime, UNIX_EPOCH}` 和 `i64/u64` 即可满足需求，日志时间由 `tracing-subscriber` 处理。
