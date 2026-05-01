@@ -5,8 +5,7 @@ export class PairingManager {
   private reversePairings: Map<string, string> = new Map()
 
   pair(clientId: string, targetId: string): boolean {
-    if (this.pairings.has(clientId) || this.reversePairings.has(clientId)) return false
-    if (this.pairings.has(targetId) || this.reversePairings.has(targetId)) return false
+    if (this.isPaired(clientId) || this.isPaired(targetId)) return false
     this.pairings.set(clientId, targetId)
     this.reversePairings.set(targetId, clientId)
     return true
