@@ -1,8 +1,9 @@
-# Reference
+# References
 .temp/
 
-# Dependencies
-node_modules/
+# Rust build
+target/
+*.pdb
 
-# Config
+# Config (user-specific, contains secrets)
 config.json
