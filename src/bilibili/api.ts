@@ -32,10 +32,6 @@ export class BilibiliClient {
     const key = this.appKey || this.config.bilibili.appKey
     const secret = this.appSecret || this.config.bilibili.appSecret
 
-    if (!key || !secret) {
-      throw new Error("AppKey 和 AppSecret 未设置")
-    }
-
     const headers = signRequest(params, key, secret)
 
     console.log(`[Bilibili] POST ${path}`, params)
