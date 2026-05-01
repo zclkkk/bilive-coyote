@@ -74,7 +74,7 @@ export class BilibiliClient {
       if (retryData.code !== 0) {
         throw new Error(`重启失败: ${retryData.message || retryData.code}`)
       }
-      return this.handleStartSuccess(retryData.data, code, appId)
+      return await this.handleStartSuccess(retryData.data, code, appId)
     }
     if (data.code === 7001) {
       throw new Error(`请求冷却期：上一个会话未正常结束，请稍后 (约 30-60s) 重试`)
@@ -83,17 +83,17 @@ export class BilibiliClient {
       throw new Error(`连接失败: ${data.message || data.code}`)
     }
 
-    return this.handleStartSuccess(data.data, code, appId)
+    return await this.handleStartSuccess(data.data, code, appId)
   }
 
-  private handleStartSuccess(data: any, code: string, appId: number): { wssLinks: string[]; authBody: string; gameId: string } {
+  private async handleStartSuccess(data: any, code: string, appId: number): Promise<{ wssLinks: string[]; authBody: string; gameId: string }> {
     const { game_info, websocket_info } = data
     this.gameId = game_info.game_id
     this.appId = appId
     this._connected = true
     this._roomId = parseRoomIdFromAuthBody(websocket_info?.auth_body)
 
-    this.config.set({
+    await this.config.set({
       bilibili: { appKey: this.appKey, appSecret: this.appSecret, code, appId, gameId: this.gameId ?? "" },
     })
 
