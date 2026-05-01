@@ -164,7 +164,9 @@ export class DanmakuWS {
         }
         this.eventBus.emit("gift", giftEvent)
       }
-    } catch {}
+    } catch (e) {
+      console.error("[Danmaku] Failed to parse message:", e)
+    }
   }
 
   private buildPacket(op: number, body: string): ArrayBuffer {

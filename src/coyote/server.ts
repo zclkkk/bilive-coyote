@@ -299,7 +299,9 @@ export class CoyoteServer {
       try {
         const partnerId = this.pairing.getPartnerId(id) || ""
         client.ws.send(buildMessage("heartbeat", id, partnerId, ErrCode.SUCCESS))
-      } catch {}
+      } catch (e) {
+        console.error(`[Coyote] Heartbeat send failed for ${id}:`, e)
+      }
     }
   }
 

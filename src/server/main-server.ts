@@ -158,7 +158,9 @@ export class MainServer {
     for (const ws of this.panelClients) {
       try {
         ws.send(msg)
-      } catch {}
+      } catch (e) {
+        console.error("[Server] Panel broadcast send failed:", e)
+      }
     }
   }
 

@@ -59,7 +59,9 @@ export class BilibiliClient {
       console.log(`[Bilibili] Cleaning stale game from previous run: ${staleGameId}`)
       try {
         await this.request("/v2/app/end", { game_id: staleGameId, app_id: appId })
-      } catch {}
+      } catch (e) {
+        console.error("[Bilibili] Failed to end stale game:", e)
+      }
       // 无论成败都清除，避免下次重复清理
       await this.config.set({ bilibili: { ...this.config.bilibili, gameId: "" } })
     }
@@ -122,13 +124,16 @@ export class BilibiliClient {
   async end(): Promise<void> {
     if (!this.gameId) return
     try {
-      // /v2/app/end 需要 game_id + app_id，只传 game_id 会被拒为 4000 参数错误
       await this.request("/v2/app/end", { game_id: this.gameId, app_id: this.appId })
-    } catch {}
+    } catch (e) {
+      console.error("[Bilibili] Failed to end game:", e)
+    }
     // 正常 end 后清除持久化的 gameId，避免下次启动重复清理
     try {
       await this.config.set({ bilibili: { ...this.config.bilibili, gameId: "" } })
-    } catch {}
+    } catch (e) {
+      console.error("[Bilibili] Failed to clear gameId in config:", e)
+    }
     this.stop()
   }
 
