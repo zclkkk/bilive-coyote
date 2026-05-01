@@ -61,11 +61,7 @@ export class ConfigStore {
   }
 
   async save(): Promise<void> {
-    try {
-      await Bun.write(this.filePath, JSON.stringify(this.data, null, 2))
-    } catch (e) {
-      console.error("[Config] Failed to save:", e)
-    }
+    await Bun.write(this.filePath, JSON.stringify(this.data, null, 2))
   }
 }
 
