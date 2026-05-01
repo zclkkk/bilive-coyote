@@ -37,6 +37,9 @@ export class CoyoteServer {
   private currentStrength = { a: 0, b: 0, limitA: 200, limitB: 200 }
   private server: any = null
   private virtualClientId: string | null = null
+  private lastHeartbeatAt: Map<string, number> = new Map()
+
+  private static readonly STALE_CLIENT_TIMEOUT_MS = 90_000
 
   constructor(config: ConfigStore, eventBus: EventBus) {
     this.config = config
@@ -83,6 +86,7 @@ export class CoyoteServer {
     const id = this.pairing.generateId()
     ws.data = { ...ws.data, id }
     this.clients.set(id, { ws, id, isApp: false })
+    this.lastHeartbeatAt.set(id, Date.now())
     const bindMsg = buildMessage("bind", id, "", "targetId")
     ws.send(bindMsg)
     console.log(`[Coyote] Client connected: ${id}`)
@@ -252,6 +256,7 @@ export class CoyoteServer {
     this.pulseTimers.stopPulseByClient(id)
 
     this.clients.delete(id)
+    this.lastHeartbeatAt.delete(id)
 
     if (id === this.appClientId) this.appClientId = null
     if (id === this.frontClientId && id !== this.virtualClientId) this.frontClientId = this.virtualClientId
@@ -299,8 +304,25 @@ export class CoyoteServer {
       try {
         const partnerId = this.pairing.getPartnerId(id) || ""
         client.ws.send(buildMessage("heartbeat", id, partnerId, ErrCode.SUCCESS))
+        this.lastHeartbeatAt.set(id, Date.now())
       } catch (e) {
         console.error(`[Coyote] Heartbeat send failed for ${id}:`, e)
+      }
+    }
+    this.cleanupStaleClients()
+  }
+
+  private cleanupStaleClients(): void {
+    const now = Date.now()
+    for (const [id, lastSeen] of this.lastHeartbeatAt) {
+      if (id === this.virtualClientId) continue
+      if (now - lastSeen <= CoyoteServer.STALE_CLIENT_TIMEOUT_MS) continue
+
+      console.log(`[Coyote] Cleaning up stale client: ${id} (last seen ${now - lastSeen}ms ago)`)
+      const clientInfo = this.clients.get(id)
+      if (clientInfo) {
+        try { clientInfo.ws.close() } catch {}
+        this.onClose(clientInfo.ws)
       }
     }
   }
