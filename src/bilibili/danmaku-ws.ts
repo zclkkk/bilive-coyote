@@ -14,6 +14,9 @@ const WS_BODY_PROTOCOL_VERSION_DEFLATE = 2
 const WS_BODY_PROTOCOL_VERSION_BROTLI = 3
 
 const HEARTBEAT_INTERVAL_MS = 20000
+const RECONNECT_BASE_MS = 3000
+const RECONNECT_MAX_MS = 60000
+const MAX_RECONNECT_ATTEMPTS = 5
 
 const CMD_OPEN_PLATFORM_GIFT = "LIVE_OPEN_PLATFORM_SEND_GIFT"
 
@@ -23,6 +26,13 @@ export class DanmakuWS {
   private eventBus: EventBus
   private bilibili: BilibiliClient
   private roomId: number | null = null
+
+  private wssLinks: string[] = []
+  private authBody: string = ""
+  private wssIndex: number = 0
+  private reconnectAttempts: number = 0
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private intentionalDisconnect: boolean = false
 
   constructor(bilibili: BilibiliClient, eventBus: EventBus) {
     this.bilibili = bilibili
@@ -44,8 +54,18 @@ export class DanmakuWS {
       this.eventBus.emit("bilibili:status", { connected: false, error: "wss_link 为空" })
       return
     }
+
+    this.wssLinks = wssLinks
+    this.authBody = authBody
+    this.wssIndex = 0
+    this.reconnectAttempts = 0
+    this.intentionalDisconnect = false
     this.roomId = typeof auth.roomid === "number" ? auth.roomid : null
 
+    this.doConnect(url, auth)
+  }
+
+  private doConnect(url: string, auth: any): void {
     console.log(`[Danmaku] Connecting to ${url}, room: ${this.roomId}`)
     this.ws = new WebSocket(url)
 
@@ -64,13 +84,48 @@ export class DanmakuWS {
     this.ws.onclose = () => {
       console.log("[Danmaku] Disconnected")
       this.cleanup()
-      this.eventBus.emit("bilibili:status", { connected: false })
+      if (!this.intentionalDisconnect) {
+        this.tryReconnect()
+      } else {
+        this.eventBus.emit("bilibili:status", { connected: false })
+      }
     }
 
     this.ws.onerror = (e) => {
       console.error("[Danmaku] Error:", e)
-      this.eventBus.emit("bilibili:status", { connected: false, error: "WebSocket error" })
     }
+  }
+
+  private tryReconnect(): void {
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.error(`[Danmaku] Reconnect failed after ${MAX_RECONNECT_ATTEMPTS} attempts`)
+      this.eventBus.emit("bilibili:status", {
+        connected: false,
+        error: `弹幕连接断开，已重试 ${MAX_RECONNECT_ATTEMPTS} 次仍失败，请手动重新连接`,
+      })
+      return
+    }
+
+    this.reconnectAttempts++
+    this.wssIndex = (this.wssIndex + 1) % this.wssLinks.length
+    const url = this.wssLinks[this.wssIndex]
+    const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, this.reconnectAttempts - 1), RECONNECT_MAX_MS)
+
+    console.log(`[Danmaku] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}, url index ${this.wssIndex})`)
+
+    let auth: any
+    try {
+      auth = JSON.parse(this.authBody)
+    } catch (e: any) {
+      console.error("[Danmaku] Invalid stored auth_body:", e.message)
+      this.eventBus.emit("bilibili:status", { connected: false, error: "重连凭证失效，请手动重新连接" })
+      return
+    }
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      this.doConnect(url, auth)
+    }, delay)
   }
 
   private sendAuth(auth: any): void {
@@ -111,6 +166,7 @@ export class DanmakuWS {
       switch (op) {
         case WS_OP_CONNECT_SUCCESS:
           console.log("[Danmaku] Auth success, connected to room")
+          this.reconnectAttempts = 0
           this.startHeartbeat()
           this.eventBus.emit("bilibili:status", { connected: true, roomId: this.roomId ?? undefined })
           break
@@ -150,7 +206,6 @@ export class DanmakuWS {
 
       if (msg.cmd === CMD_OPEN_PLATFORM_GIFT && msg.data) {
         const d = msg.data
-        // 开放平台使用 snake_case；paid=true 才是付费礼物 (金瓜子)
         const coinType = d.paid === true ? "gold" : "silver"
         const giftEvent: GiftEvent = {
           giftId: d.gift_id ?? d.giftId ?? 0,
@@ -194,6 +249,11 @@ export class DanmakuWS {
   }
 
   disconnect(): void {
+    this.intentionalDisconnect = true
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     this.cleanup()
     if (this.ws) {
       this.ws.close()
