@@ -21,7 +21,6 @@ export const api = {
   },
 
   bilibili: {
-    auth: (key, secret) => api.post("/api/bilibili/auth", { appKey: key, appSecret: secret }),
     start: (code, appId, appKey, appSecret) => api.post("/api/bilibili/start", { code, appId, appKey, appSecret }),
     stop: () => api.post("/api/bilibili/stop"),
     status: () => api.get("/api/bilibili/status"),

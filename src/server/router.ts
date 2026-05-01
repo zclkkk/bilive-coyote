@@ -26,22 +26,6 @@ export function createRouter(
     })
   })
 
-  routes.set("POST /api/bilibili/auth", async (req) => {
-    const body = await req.json() as { appKey: string; appSecret: string }
-    if (!body.appKey || !body.appSecret) {
-      return Response.json({ error: "appKey and appSecret required" }, { status: 400 })
-    }
-    try {
-      const ok = await bilibili.auth(body.appKey, body.appSecret)
-      if (!ok) {
-        return Response.json({ success: false, error: "签名验证失败，请检查 AppKey 和 AppSecret" })
-      }
-      return Response.json({ success: true })
-    } catch (e: any) {
-      return Response.json({ error: e.message }, { status: 500 })
-    }
-  })
-
   routes.set("POST /api/bilibili/start", async (req) => {
     const body = await req.json() as { code?: string; appId?: number; appKey?: string; appSecret?: string }
     const code = body.code || config.bilibili.code

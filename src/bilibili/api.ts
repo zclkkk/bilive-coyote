@@ -47,32 +47,6 @@ export class BilibiliClient {
     return data
   }
 
-  /**
-   * 仅验证 AppKey / AppSecret 是否可正确签名。
-   * 调用 /v2/app/start 不传 code/app_id：签名错误 → 11000 类错码，参数错误 → 4000。
-   * 只要不是“签名/鉴权”错误都视为鉴权通过，使用黑名单避免 B 站返回码微调导致误报。
-   */
-  async auth(appKey: string, appSecret: string): Promise<boolean> {
-    this.appKey = appKey
-    this.appSecret = appSecret
-    try {
-      const data = await this.request("/v2/app/start", {})
-      // 完全成功 (不太可能因为参数为空) 或参数/业务错误都视为签名通过
-      if (data.code === 0) return true
-      // 官方文档中与鉴权/签名相关的错误码
-      const AUTH_FAILURE_CODES = new Set([4002, 11000, 11001, 11002, 11003, 11004])
-      if (AUTH_FAILURE_CODES.has(data.code)) {
-        console.log(`[Bilibili] Auth failed (code=${data.code}): ${data.message}`)
-        return false
-      }
-      // 其他错误码 (例如 4000=参数缺失) 意味着签名已被接受
-      return true
-    } catch (e: any) {
-      console.error("[Bilibili] Auth error:", e.message)
-      throw new Error(`验证失败: ${e.message}`)
-    }
-  }
-
   async start(code: string, appId: number): Promise<{ wssLinks: string[]; authBody: string; gameId: string }> {
     // 本进程内存中有残留 game——直接 end
     if (this.gameId) {
