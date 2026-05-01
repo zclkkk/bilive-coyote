@@ -399,18 +399,18 @@ src/
 
 | 目录 | 说明 | 关键参考内容 |
 |------|------|-------------|
-| `.temp/bilive-coyote-ts/` | 本项目的 TS 原版实现 | 完整业务逻辑、前端 UI、API 路由，迁移时作为功能等价性对照 |
+| `.temp/bilive-coyote/` | 本项目的 TS 原版实现 | 完整业务逻辑、前端 UI、API 路由，迁移时作为功能等价性对照 |
 | `.temp/bilisdk/` | B站开放平台官方 Demo | `server/tool/index.ts` — 签名算法；`server/routes/` — 开放平台 API 调用方式 |
 | `.temp/DG-LAB-OPENSOURCE/` | DG-LAB Coyote 开源仓库 | `socket/v2/README.md` — SOCKET v2 协议完整文档；`socket/v2/backend/src/` — Node.js 参考实现 |
 
 ### 关键参考路径
 
 **B站签名算法：**
-- 本项目原版：[`.temp/bilive-coyote-ts/src/bilibili/signer.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote-ts/src/bilibili/signer.ts)
+- 本项目原版：[`.temp/bilive-coyote/src/bilibili/signer.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/bilibili/signer.ts)
 - B站官方 Demo：[`.temp/bilisdk/server/tool/index.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilisdk/server/tool/index.ts)
 
 **弹幕二进制协议：**
-- 本项目原版：[`.temp/bilive-coyote-ts/src/bilibili/danmaku-ws.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote-ts/src/bilibili/danmaku-ws.ts)
+- 本项目原版：[`.temp/bilive-coyote/src/bilibili/danmaku-ws.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/bilibili/danmaku-ws.ts)
 
 **DG-LAB SOCKET 协议：**
 - 协议文档：[`.temp/DG-LAB-OPENSOURCE/socket/v2/README.md`](file:///home/zclkkk/workspace/bilive-coyote/.temp/DG-LAB-OPENSOURCE/socket/v2/README.md)
@@ -420,9 +420,9 @@ src/
 - 定时器：[`.temp/DG-LAB-OPENSOURCE/socket/v2/backend/src/timer.js`](file:///home/zclkkk/workspace/bilive-coyote/.temp/DG-LAB-OPENSOURCE/socket/v2/backend/src/timer.js)
 
 **业务逻辑对照：**
-- 礼物映射：[`.temp/bilive-coyote-ts/src/engine/gift-mapper.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote-ts/src/engine/gift-mapper.ts)
-- 强度管理：[`.temp/bilive-coyote-ts/src/engine/strength-manager.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote-ts/src/engine/strength-manager.ts)
-- 前端面板：[`.temp/bilive-coyote-ts/public/`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote-ts/public/)
+- 礼物映射：[`.temp/bilive-coyote/src/engine/gift-mapper.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/engine/gift-mapper.ts)
+- 强度管理：[`.temp/bilive-coyote/src/engine/strength-manager.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/engine/strength-manager.ts)
+- 前端面板：[`.temp/bilive-coyote/public/`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/public/)
 
 ---
 
