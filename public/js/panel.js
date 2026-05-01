@@ -177,14 +177,17 @@ function setupEventListeners() {
     $("#limitA").value = limitA
     $("#limitB").value = limitB
 
-    await api.config.set({
-      safety: {
-        limitA,
-        limitB,
-        decayEnabled: $("#decayEnabled").checked,
-        decayRate: parseInt($("#decayRate").value),
-      },
-    })
+    const safety = {
+      limitA,
+      limitB,
+      decayEnabled: $("#decayEnabled").checked,
+      decayRate: parseInt($("#decayRate").value),
+    }
+
+    await api.config.set({ safety })
+
+    currentConfig.safety = safety
+    await loadStatus()
   }
 
   $("#add-rule-btn").onclick = async () => {

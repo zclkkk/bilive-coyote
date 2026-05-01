@@ -86,6 +86,9 @@ export function createRouter(
   routes.set("PUT /api/config", async (req) => {
     const body = await req.json()
     await config.set(body)
+    if (body.safety) {
+      strengthMgr.enforceLimits()
+    }
     return Response.json({ success: true })
   })
 

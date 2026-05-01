@@ -35,6 +35,7 @@ export class StrengthManager {
   updateAppLimits(limitA: number, limitB: number): void {
     this.appLimits.a = limitA
     this.appLimits.b = limitB
+    this.enforceLimits()
   }
 
   /**
@@ -103,6 +104,19 @@ export class StrengthManager {
     const val = this.channels[ch].value
     this.lastInternalChangeAt = Date.now()
     this.coyote.sendStrength(ch, 2, val)
+  }
+
+  enforceLimits(): void {
+    for (const ch of ["A", "B"] as const) {
+      const limit = this.getLimit(ch)
+      if (this.channels[ch].value > limit) {
+        this.channels[ch].value = limit
+        this.channels[ch].baseline = limit
+        this.channels[ch].expiries = []
+        this.lastInternalChangeAt = Date.now()
+        this.coyote.sendStrength(ch, 2, limit)
+      }
+    }
   }
 
   setManualStrength(channel: "A" | "B", value: number): void {
