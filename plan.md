@@ -1,4 +1,4 @@
-# Bilive-Coyote → Rust 迁移计划
+# Bilive-Coyote Rust 重写计划
 
 ## 技术决策
 
@@ -211,7 +211,7 @@ src/bilibili/danmaku.rs   # WS 客户端 + 重连 + 心跳
 ```
 
 **完成条件：**
-- 签名正确性单测通过（对照 B站开放平台文档的示例参数）
+- 签名正确性单测通过（参照 B站开放平台文档的示例参数）
 - 弹幕二进制协议解析单测通过（多包、压缩、边界 case）
 - Mock server 测试通过
 - 真实 B站联调可收到礼物事件
@@ -395,22 +395,22 @@ src/
 
 ## 参考项目
 
-项目中 `.temp/` 目录下保留了三个参考项目，迁移开发时可按需查阅：
+项目中 `.temp/` 目录下保留了三个参考项目，开发时可按需查阅以理解业务需求和协议细节：
 
 | 目录 | 说明 | 关键参考内容 |
 |------|------|-------------|
-| `.temp/bilive-coyote/` | 本项目的 TS 原版实现 | 完整业务逻辑、前端 UI、API 路由，迁移时作为功能等价性对照 |
+| `.temp/bilive-coyote/` | 旧版 TS 实现 | 完整业务逻辑、前端 UI、API 路由，重写时作为功能等价性参照 |
 | `.temp/bilisdk/` | B站开放平台官方 Demo | `server/tool/index.ts` — 签名算法；`server/routes/` — 开放平台 API 调用方式 |
 | `.temp/DG-LAB-OPENSOURCE/` | DG-LAB Coyote 开源仓库 | `socket/v2/README.md` — SOCKET v2 协议完整文档；`socket/v2/backend/src/` — Node.js 参考实现 |
 
 ### 关键参考路径
 
 **B站签名算法：**
-- 本项目原版：[`.temp/bilive-coyote/src/bilibili/signer.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/bilibili/signer.ts)
+- 旧版实现：[`.temp/bilive-coyote/src/bilibili/signer.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/bilibili/signer.ts)
 - B站官方 Demo：[`.temp/bilisdk/server/tool/index.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilisdk/server/tool/index.ts)
 
 **弹幕二进制协议：**
-- 本项目原版：[`.temp/bilive-coyote/src/bilibili/danmaku-ws.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/bilibili/danmaku-ws.ts)
+- 旧版实现：[`.temp/bilive-coyote/src/bilibili/danmaku-ws.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/bilibili/danmaku-ws.ts)
 
 **DG-LAB SOCKET 协议：**
 - 协议文档：[`.temp/DG-LAB-OPENSOURCE/socket/v2/README.md`](file:///home/zclkkk/workspace/bilive-coyote/.temp/DG-LAB-OPENSOURCE/socket/v2/README.md)
@@ -419,7 +419,7 @@ src/
 - 消息路由：[`.temp/DG-LAB-OPENSOURCE/socket/v2/backend/src/message.js`](file:///home/zclkkk/workspace/bilive-coyote/.temp/DG-LAB-OPENSOURCE/socket/v2/backend/src/message.js)
 - 定时器：[`.temp/DG-LAB-OPENSOURCE/socket/v2/backend/src/timer.js`](file:///home/zclkkk/workspace/bilive-coyote/.temp/DG-LAB-OPENSOURCE/socket/v2/backend/src/timer.js)
 
-**业务逻辑对照：**
+**业务逻辑参照：**
 - 礼物映射：[`.temp/bilive-coyote/src/engine/gift-mapper.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/engine/gift-mapper.ts)
 - 强度管理：[`.temp/bilive-coyote/src/engine/strength-manager.ts`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/src/engine/strength-manager.ts)
 - 前端面板：[`.temp/bilive-coyote/public/`](file:///home/zclkkk/workspace/bilive-coyote/.temp/bilive-coyote/public/)
