@@ -102,7 +102,7 @@ export class MainServer {
   private serveStatic(pathname: string): Response {
     let filePath = resolve(PUBLIC_DIR, pathname.slice(1) || "index.html")
 
-    if (!existsSync(filePath) || !filePath.startsWith(PUBLIC_DIR)) {
+    if (!existsSync(filePath)) {
       filePath = resolve(PUBLIC_DIR, "index.html")
     }
 
