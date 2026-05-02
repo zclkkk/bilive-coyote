@@ -73,7 +73,7 @@ export class BroadcastSource implements BilibiliSource<"broadcast"> {
     this.eventBus.emit("bilibili:status", this.getStatus())
   }
 
-  private handleMessage(message: any): void {
+  private handleMessage(message: unknown): void {
     const gift = parseBroadcastGift(message)
     if (gift) this.eventBus.emit("gift", gift)
   }

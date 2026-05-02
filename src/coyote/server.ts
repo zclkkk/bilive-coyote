@@ -1,10 +1,13 @@
 import { randomUUID } from "crypto"
 import { networkInterfaces } from "os"
 import QRCode from "qrcode"
+import type { Server, ServerWebSocket } from "bun"
 import { buildMessage, parseMessage, parseStrengthFeedback } from "./message"
 import { ErrCode } from "./error-codes"
 import type { EventBus } from "../engine/event-bus"
 import type { ConfigStore } from "../config/store"
+
+type AppWs = ServerWebSocket<{ id: string }>
 
 function getLANIP(): string {
   const interfaces = networkInterfaces()
@@ -16,15 +19,17 @@ function getLANIP(): string {
   return "127.0.0.1"
 }
 
+const INITIAL_STRENGTH = { a: 0, b: 0, limitA: 200, limitB: 200 }
+
 export class CoyoteServer {
   private readonly bridgeId = randomUUID()
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null
   private eventBus: EventBus
   private config: ConfigStore
-  private appWs: any = null
+  private appWs: AppWs | null = null
   private appClientId: string | null = null
-  private currentStrength = { a: 0, b: 0, limitA: 200, limitB: 200 }
-  private server: any = null
+  private currentStrength = { ...INITIAL_STRENGTH }
+  private server: Server<{ id: string }> | null = null
 
   constructor(config: ConfigStore, eventBus: EventBus) {
     this.config = config
@@ -34,21 +39,21 @@ export class CoyoteServer {
   async start(): Promise<void> {
     const port = this.config.coyote.wsPort
 
-    this.server = Bun.serve({
+    this.server = Bun.serve<{ id: string }>({
       port,
-      fetch: (req: Request, server: any) => {
+      fetch: (req, server) => {
         const url = new URL(req.url)
         const bridgeId = url.pathname.slice(1)
         if (bridgeId !== this.bridgeId) return new Response("Invalid bridge ID", { status: 404 })
-        if (server.upgrade(req)) return new Response(null)
+        if (server.upgrade(req, { data: { id: randomUUID() } })) return undefined
         return new Response("Coyote WS only", { status: 400 })
       },
       websocket: {
-        open: (ws: any) => this.onOpen(ws),
-        message: (ws: any, data: any) => this.onMessage(ws, data),
-        close: (ws: any) => this.onClose(ws),
+        open: (ws) => this.onOpen(ws),
+        message: (ws, data) => this.onMessage(ws, data),
+        close: (ws) => this.onClose(ws),
       },
-    } as any)
+    })
 
     this.heartbeatInterval = setInterval(() => this.sendHeartbeat(), 30000)
 
@@ -56,14 +61,12 @@ export class CoyoteServer {
     console.log(`[Coyote] Bridge ID: ${this.bridgeId}`)
   }
 
-  private onOpen(ws: any): void {
-    const appId = randomUUID()
-    ws.data = { id: appId }
-    ws.send(buildMessage("bind", appId, "", "targetId"))
-    console.log(`[Coyote] App socket connected: ${appId}`)
+  private onOpen(ws: AppWs): void {
+    ws.send(buildMessage("bind", ws.data.id, "", "targetId"))
+    console.log(`[Coyote] App socket connected: ${ws.data.id}`)
   }
 
-  private onMessage(ws: any, rawData: any): void {
+  private onMessage(ws: AppWs, rawData: string | Buffer): void {
     const data = typeof rawData === "string" ? rawData : new TextDecoder().decode(rawData)
     const parsed = parseMessage(data)
 
@@ -86,13 +89,13 @@ export class CoyoteServer {
     this.handleAppMessage(msg.message)
   }
 
-  private handleBind(ws: any, msg: { clientId: string; targetId: string }): void {
-    const appId = ws.data?.id
+  private handleBind(ws: AppWs, msg: { clientId: string; targetId: string }): void {
+    const appId = ws.data.id
     if (msg.clientId !== this.bridgeId) {
       ws.send(buildMessage("bind", msg.clientId, msg.targetId, ErrCode.INVALID_QR_CLIENT_ID))
       return
     }
-    if (!appId || msg.targetId !== appId) {
+    if (msg.targetId !== appId) {
       ws.send(buildMessage("bind", msg.clientId, msg.targetId, ErrCode.NO_TARGET_ID))
       return
     }
@@ -101,7 +104,7 @@ export class CoyoteServer {
 
     this.appWs = ws
     this.appClientId = appId
-    this.currentStrength = { a: 0, b: 0, limitA: 200, limitB: 200 }
+    this.currentStrength = { ...INITIAL_STRENGTH }
 
     ws.send(buildMessage("bind", this.bridgeId, appId, ErrCode.SUCCESS))
     console.log(`[Coyote] Paired with app: ${appId}`)
@@ -116,13 +119,13 @@ export class CoyoteServer {
     this.emitStatus()
   }
 
-  private onClose(ws: any): void {
+  private onClose(ws: AppWs): void {
     if (ws !== this.appWs) return
 
     const appId = this.appClientId
     this.appWs = null
     this.appClientId = null
-    this.currentStrength = { a: 0, b: 0, limitA: 200, limitB: 200 }
+    this.currentStrength = { ...INITIAL_STRENGTH }
 
     console.log(`[Coyote] App disconnected: ${appId}`)
     this.emitStatus()
