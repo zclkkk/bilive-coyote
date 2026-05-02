@@ -1,24 +1,24 @@
-import type { GiftEvent } from "../../engine/event-bus"
+import type { GiftEvent } from "../../engine/event-bus";
 
 interface BroadcastGiftMessage {
-  cmd: string
+  cmd: string;
   data?: {
-    giftId: number
-    giftName: string
-    coin_type: string
-    price: number
-    num: number
-    uid: number
-    uname: string
-    timestamp: number
-  }
+    giftId: number;
+    giftName: string;
+    coin_type: string;
+    price: number;
+    num: number;
+    uid: number;
+    uname: string;
+    timestamp: number;
+  };
 }
 
 export function parseBroadcastGift(message: unknown): GiftEvent | null {
-  const m = message as BroadcastGiftMessage | null
-  if (m?.cmd !== "SEND_GIFT" || !m.data) return null
+  const m = message as BroadcastGiftMessage | null;
+  if (m?.cmd !== "SEND_GIFT" || !m.data) return null;
 
-  const d = m.data
+  const d = m.data;
   return {
     giftId: d.giftId,
     giftName: d.giftName,
@@ -28,5 +28,5 @@ export function parseBroadcastGift(message: unknown): GiftEvent | null {
     uid: d.uid,
     uname: d.uname,
     timestamp: d.timestamp,
-  }
+  };
 }

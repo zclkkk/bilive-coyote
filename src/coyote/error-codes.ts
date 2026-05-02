@@ -13,6 +13,6 @@ export const ErrCode = {
   MESSAGE_TOO_LONG: "405",
   CHANNEL_REQUIRED: "406",
   INTERNAL_ERROR: "500",
-} as const
+} as const;
 
-export type ErrCodeValue = typeof ErrCode[keyof typeof ErrCode]
+export type ErrCodeValue = (typeof ErrCode)[keyof typeof ErrCode];

@@ -1,8 +1,8 @@
 async function request(url, init) {
-  const r = await fetch(url, init)
-  const data = r.status === 204 ? null : await r.json().catch(() => null)
-  if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`)
-  return data
+  const r = await fetch(url, init);
+  const data = r.status === 204 ? null : await r.json().catch(() => null);
+  if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+  return data;
 }
 
 const json = (method) => (url, body) =>
@@ -10,11 +10,11 @@ const json = (method) => (url, body) =>
     method,
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
-  })
+  });
 
-const get = (url) => request(url)
-const post = json("POST")
-const put = json("PUT")
+const get = (url) => request(url);
+const post = json("POST");
+const put = json("PUT");
 
 export const api = {
   status: () => get("/api/status"),
@@ -35,4 +35,4 @@ export const api = {
       set: (rules) => put("/api/config/rules", rules),
     },
   },
-}
+};
