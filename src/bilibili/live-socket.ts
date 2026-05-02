@@ -235,6 +235,11 @@ function buildPacket(op: number, body: string): ArrayBuffer {
   return buf
 }
 
+/**
+ * 从 protover 0/1 的 body 里提取所有 JSON 消息。
+ * B 站偶尔会在同一个 body 前后粘进控制字符或多段 JSON (弹幕协议 FAQ 提到过)，
+ * 因此不能只做一次 JSON.parse，否则整帧会被吞掉 (包括 SEND_GIFT)。
+ */
 function parseJsonMessages(body: Uint8Array): unknown[] {
   const text = new TextDecoder().decode(body)
   const chunks = text.split(/[\x00-\x1f]+/).map(item => item.trim()).filter(Boolean)

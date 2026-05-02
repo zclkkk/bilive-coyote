@@ -2,14 +2,15 @@ import { OpenPlatformSource } from "./open-platform"
 import { BroadcastSource } from "./broadcast"
 import type { BilibiliSources, BilibiliStartInput, BilibiliStatus } from "./types"
 import type { ConfigStore } from "../config/store"
+import type { RuntimeStateStore } from "../config/runtime-state"
 import type { EventBus } from "../engine/event-bus"
 
 export class BilibiliService {
   private sources: BilibiliSources
   private active: BilibiliSources[keyof BilibiliSources]
 
-  constructor(config: ConfigStore, eventBus: EventBus) {
-    const openPlatform = new OpenPlatformSource(config, eventBus)
+  constructor(config: ConfigStore, state: RuntimeStateStore, eventBus: EventBus) {
+    const openPlatform = new OpenPlatformSource(config, state, eventBus)
     const broadcast = new BroadcastSource(config, eventBus)
     this.sources = {
       [openPlatform.type]: openPlatform,

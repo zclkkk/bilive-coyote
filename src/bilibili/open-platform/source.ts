@@ -3,6 +3,7 @@ import { parseOpenPlatformGift } from "./parser"
 import { signOpenPlatformRequest } from "./signer"
 import type { BilibiliSource, BilibiliStatus, OpenPlatformStartInput } from "../types"
 import type { ConfigStore } from "../../config/store"
+import type { RuntimeStateStore } from "../../config/runtime-state"
 import type { EventBus } from "../../engine/event-bus"
 
 const BASE_URL = "https://live-open.biliapi.com"
@@ -35,6 +36,7 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
   readonly type = "open-platform" as const
 
   private config: ConfigStore
+  private state: RuntimeStateStore
   private eventBus: EventBus
   private socket: BilibiliLiveSocket
   private credentials: OpenPlatformCredentials = { appKey: "", appSecret: "" }
@@ -44,8 +46,9 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
   private roomId: number | null = null
   private socketStatus: LiveSocketStatus = { connected: false }
 
-  constructor(config: ConfigStore, eventBus: EventBus) {
+  constructor(config: ConfigStore, state: RuntimeStateStore, eventBus: EventBus) {
     this.config = config
+    this.state = state
     this.eventBus = eventBus
     this.socket = new BilibiliLiveSocket()
   }
@@ -87,13 +90,7 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
     const appId = this.appId
     this.reset()
     if (!gameId) return
-
-    try {
-      await this.request("/v2/app/end", { game_id: gameId, app_id: appId })
-    } catch (e) {
-      console.error("[Bilibili/OpenPlatform] Failed to end game:", e)
-    }
-    await this.config.set({ bilibili: { openPlatform: { gameId: "" } } })
+    await this.endGame(gameId, appId, "Failed to end game")
   }
 
   getStatus(): BilibiliStatus {
@@ -123,16 +120,29 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
   }
 
   private async clearStaleGame(appId: number): Promise<void> {
-    const staleGameId = this.config.bilibili.openPlatform.gameId
+    const staleGameId = this.state.openPlatformGameId
     if (!staleGameId) return
 
     console.log(`[Bilibili/OpenPlatform] Cleaning stale game from previous run: ${staleGameId}`)
+    await this.endGame(staleGameId, appId, "Failed to end stale game")
+  }
+
+  /**
+   * 调用 /v2/app/end 并在 **确认成功** (code === 0) 后清空 runtime state 里的 gameId。
+   * 网络错误或非零 code 保留 gameId，以便下次启动继续清理。
+   */
+  private async endGame(gameId: string, appId: number, errLabel: string): Promise<void> {
     try {
-      await this.request("/v2/app/end", { game_id: staleGameId, app_id: appId })
+      const resp = await this.request("/v2/app/end", { game_id: gameId, app_id: appId })
+      if (resp.code !== 0) {
+        console.error(`[Bilibili/OpenPlatform] ${errLabel}: code=${resp.code} message=${resp.message}`)
+        return
+      }
     } catch (e) {
-      console.error("[Bilibili/OpenPlatform] Failed to end stale game:", e)
+      console.error(`[Bilibili/OpenPlatform] ${errLabel}:`, e)
+      return
     }
-    await this.config.set({ bilibili: { openPlatform: { gameId: "" } } })
+    await this.state.setOpenPlatformGameId("")
   }
 
   private async handleStartSuccess(
@@ -145,10 +155,11 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
     this.gameId = game_info.game_id
     this.roomId = typeof auth.roomid === "number" ? auth.roomid : null
 
+    await this.state.setOpenPlatformGameId(this.gameId)
     await this.config.set({
       bilibili: {
         source: this.type,
-        openPlatform: { ...input, gameId: this.gameId ?? "" },
+        openPlatform: input,
       },
     })
 

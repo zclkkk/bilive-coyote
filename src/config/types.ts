@@ -18,8 +18,6 @@ export interface AppConfig {
       appSecret: string
       code: string
       appId: number
-      /** 上次 start 得到的 game_id；进程重启后用于清理残留会话，正常 end 后置空 */
-      gameId?: string
     }
     broadcast: {
       roomId: number
@@ -49,7 +47,6 @@ export const DEFAULT_CONFIG: AppConfig = {
       appSecret: "",
       code: "",
       appId: 0,
-      gameId: "",
     },
     broadcast: {
       roomId: 0,
