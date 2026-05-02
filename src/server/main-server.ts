@@ -1,5 +1,3 @@
-import { resolve, extname } from "path"
-import { existsSync } from "fs"
 import type { ConfigStore } from "../config/store"
 import type { EventBus } from "../engine/event-bus"
 import type { CoyoteServer } from "../coyote/server"
@@ -7,28 +5,7 @@ import type { StrengthManager } from "../engine/strength-manager"
 import type { BilibiliService } from "../bilibili/service"
 import { ValidationError } from "../config/schema"
 import { createRouter, matchRoute } from "./router"
-
-const MIME_TYPES: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "application/javascript; charset=utf-8",
-  ".json": "application/json",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-}
-
-// 静态文件目录：环境变量 > cwd/public > 源码相邻目录 (开发环境)
-function resolvePublicDir(): string {
-  const envDir = process.env.PUBLIC_DIR
-  if (envDir && envDir.length > 0) return resolve(envDir)
-  const cwdPublic = resolve(process.cwd(), "public")
-  if (existsSync(cwdPublic)) return cwdPublic
-  return resolve(import.meta.dir, "../../public")
-}
-
-const PUBLIC_DIR = resolvePublicDir()
+import panel from "../../public/index.html"
 
 export class MainServer {
   private config: ConfigStore
@@ -58,6 +35,9 @@ export class MainServer {
     this.server = Bun.serve({
       port: httpPort,
       hostname: host,
+      routes: {
+        "/": panel,
+      },
       fetch: (req, server) => this.handleRequest(req, server),
       websocket: {
         open: (ws) => this.onWsOpen(ws),
@@ -92,25 +72,7 @@ export class MainServer {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
 
-    return this.serveStatic(url.pathname)
-  }
-
-  private serveStatic(pathname: string): Response {
-    let filePath = resolve(PUBLIC_DIR, pathname.slice(1) || "index.html")
-
-    if (!existsSync(filePath)) {
-      filePath = resolve(PUBLIC_DIR, "index.html")
-    }
-
-    const ext = extname(filePath)
-    const mime = MIME_TYPES[ext] || "application/octet-stream"
-    const file = Bun.file(filePath)
-
-    if (!file.size) {
-      return new Response("Not Found", { status: 404 })
-    }
-
-    return new Response(file, { headers: { "Content-Type": mime } })
+    return new Response("Not found", { status: 404 })
   }
 
   private onWsOpen(ws: any): void {
