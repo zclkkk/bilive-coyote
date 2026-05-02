@@ -24,6 +24,16 @@ export class StrengthManager {
     this.eventBus = eventBus
     this.coyote = coyote
     this.eventBus.on("strength:change", (e) => this.onStrengthChange(e))
+    // Subscribe before MainServer so local state is updated before the
+    // coyote:status forwarder reads getLimit() for its broadcast.
+    this.eventBus.on("coyote:status", (status) => {
+      if (status.paired) {
+        this.updateAppLimits(status.limitA, status.limitB)
+        this.applyAppFeedback(status.strengthA, status.strengthB)
+      } else {
+        this.resetLocal()
+      }
+    })
     this.startDecayLoop()
   }
 
@@ -44,7 +54,7 @@ export class StrengthManager {
     this.appLimits = { a: 200, b: 200 }
   }
 
-  private getLimit(ch: "A" | "B"): number {
+  getLimit(ch: "A" | "B"): number {
     const safety = this.config.safety
     const configLimit = ch === "A" ? safety.limitA : safety.limitB
     const appLimit = ch === "A" ? this.appLimits.a : this.appLimits.b
