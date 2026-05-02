@@ -1,4 +1,4 @@
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import type { BilibiliStatus } from "../bilibili/types";
 
 export interface GiftEvent {

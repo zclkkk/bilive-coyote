@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "fs";
-import { isAbsolute, resolve } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import { ValidationError, validateConfig, validateRules } from "./schema";
 import { type AppConfig, DEFAULT_CONFIG } from "./types";
 
@@ -73,13 +73,13 @@ function partialObject(value: unknown): Partial<AppConfig> {
   return value as Partial<AppConfig>;
 }
 
-function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
+function deepMerge<T extends object>(target: T, source: Partial<T>): T {
   const result = { ...target };
   for (const key of Object.keys(source) as (keyof T)[]) {
     const sv = source[key];
     const tv = target[key];
     if (sv && typeof sv === "object" && !Array.isArray(sv) && tv && typeof tv === "object" && !Array.isArray(tv)) {
-      result[key] = deepMerge(tv as Record<string, any>, sv as Record<string, any>) as T[keyof T];
+      result[key] = deepMerge(tv as object, sv as object) as T[keyof T];
     } else if (sv !== undefined) {
       result[key] = sv as T[keyof T];
     }

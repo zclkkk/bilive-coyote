@@ -1,4 +1,4 @@
-import { brotliDecompressSync, inflateSync } from "zlib";
+import { brotliDecompressSync, inflateSync } from "node:zlib";
 
 const WS_OP_HEARTBEAT = 2;
 const WS_OP_HEARTBEAT_REPLY = 3;
@@ -245,6 +245,7 @@ function buildPacket(op: number, body: string): ArrayBuffer {
 function parseJsonMessages(body: Uint8Array): unknown[] {
   const text = new TextDecoder().decode(body);
   const chunks = text
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: B站弹幕协议使用控制字符分隔消息段
     .split(/[\x00-\x1f]+/)
     .map((item) => item.trim())
     .filter(Boolean);

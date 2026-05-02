@@ -1,6 +1,6 @@
+import { randomUUID } from "node:crypto";
+import { networkInterfaces } from "node:os";
 import type { Server, ServerWebSocket } from "bun";
-import { randomUUID } from "crypto";
-import { networkInterfaces } from "os";
 import QRCode from "qrcode";
 import type { ConfigStore } from "../config/store";
 import type { EventBus } from "../engine/event-bus";
