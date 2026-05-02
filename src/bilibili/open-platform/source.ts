@@ -12,6 +12,25 @@ interface OpenPlatformCredentials {
   appSecret: string
 }
 
+interface OpenPlatformResponse<T = unknown> {
+  code: number
+  message?: string
+  data: T
+}
+
+interface OpenPlatformStartData {
+  game_info: { game_id: string }
+  websocket_info: { wss_link: string[]; auth_body: string }
+}
+
+interface OpenPlatformAuthBody {
+  key: string
+  group?: string
+  roomid?: number
+  protoover?: number
+  uid?: number
+}
+
 export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
   readonly type = "open-platform" as const
 
@@ -49,18 +68,18 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
 
     await this.clearStaleGame(appId)
 
-    const data = await this.request("/v2/app/start", { code, app_id: appId })
-    if (data.code === 7002) {
+    const resp = await this.request<OpenPlatformStartData>("/v2/app/start", { code, app_id: appId })
+    if (resp.code === 7002) {
       throw new Error("直播间已有互动玩法会话，请先结束已有会话后重试")
     }
-    if (data.code === 7001) {
+    if (resp.code === 7001) {
       throw new Error("请求冷却期：上一个会话未正常结束，请稍后 (约 30-60s) 重试")
     }
-    if (data.code !== 0) {
-      throw new Error(`连接失败: ${data.message || data.code}`)
+    if (resp.code !== 0) {
+      throw new Error(`连接失败: ${resp.message || resp.code}`)
     }
 
-    await this.handleStartSuccess(data.data, { appKey, appSecret, code, appId })
+    await this.handleStartSuccess(resp.data, { appKey, appSecret, code, appId })
   }
 
   async stop(): Promise<void> {
@@ -87,7 +106,7 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
     }
   }
 
-  private async request(path: string, params: Record<string, unknown> = {}): Promise<any> {
+  private async request<T = unknown>(path: string, params: Record<string, unknown> = {}): Promise<OpenPlatformResponse<T>> {
     const headers = signOpenPlatformRequest(params, this.credentials.appKey, this.credentials.appSecret)
 
     console.log(`[Bilibili/OpenPlatform] POST ${path}`)
@@ -98,7 +117,7 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
       body: JSON.stringify(params),
     })
 
-    const data = await resp.json()
+    const data = (await resp.json()) as OpenPlatformResponse<T>
     console.log(`[Bilibili/OpenPlatform] Response ${path}: code=${data.code}`)
     return data
   }
@@ -117,11 +136,11 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
   }
 
   private async handleStartSuccess(
-    data: any,
+    data: OpenPlatformStartData,
     input: { appKey: string; appSecret: string; code: string; appId: number },
   ): Promise<void> {
     const { game_info, websocket_info } = data
-    const auth = parseAuthBody(websocket_info?.auth_body)
+    const auth = parseAuthBody(websocket_info.auth_body)
 
     this.gameId = game_info.game_id
     this.roomId = typeof auth.roomid === "number" ? auth.roomid : null
@@ -152,7 +171,7 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
     console.log(`[Bilibili/OpenPlatform] Started! Game ID: ${this.gameId}, Room: ${this.roomId}`)
   }
 
-  private handleMessage(message: any): void {
+  private handleMessage(message: unknown): void {
     const gift = parseOpenPlatformGift(message)
     if (gift) this.eventBus.emit("gift", gift)
   }
@@ -185,12 +204,12 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
   }
 }
 
-function parseAuthBody(authBody: unknown): any {
+function parseAuthBody(authBody: unknown): OpenPlatformAuthBody {
   if (typeof authBody !== "string" || authBody.length === 0) {
     throw new Error("auth_body 为空")
   }
   try {
-    return JSON.parse(authBody)
+    return JSON.parse(authBody) as OpenPlatformAuthBody
   } catch {
     throw new Error("auth_body 格式错误")
   }

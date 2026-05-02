@@ -18,16 +18,13 @@ export class BilibiliService {
     this.active = this.sources[config.bilibili.source]
   }
 
-  async start(input: BilibiliStartInput): Promise<void> {
-    const next = this.sources[input.source]
-
-    if (next !== this.active) await this.active.stop()
+  async start<T extends BilibiliStartInput["source"]>(
+    input: Extract<BilibiliStartInput, { source: T }>,
+  ): Promise<void> {
+    if (this.active.type !== input.source) await this.active.stop()
+    const next = this.sources[input.source] as BilibiliSources[T]
     this.active = next
-    if (input.source === "open-platform") {
-      await this.sources["open-platform"].start(input)
-    } else {
-      await this.sources.broadcast.start(input)
-    }
+    await next.start(input)
   }
 
   async end(): Promise<void> {

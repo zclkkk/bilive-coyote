@@ -26,7 +26,7 @@ interface LiveSocketOptions {
   urls: string[]
   auth: Record<string, unknown>
   roomId?: number | null
-  onMessage: (message: any) => void
+  onMessage: (message: unknown) => void
   onStatus: (status: LiveSocketStatus) => void
 }
 
@@ -235,10 +235,10 @@ function buildPacket(op: number, body: string): ArrayBuffer {
   return buf
 }
 
-function parseJsonMessages(body: Uint8Array): any[] {
+function parseJsonMessages(body: Uint8Array): unknown[] {
   const text = new TextDecoder().decode(body)
   const chunks = text.split(/[\x00-\x1f]+/).map(item => item.trim()).filter(Boolean)
-  const messages: any[] = []
+  const messages: unknown[] = []
 
   for (const chunk of chunks.length > 0 ? chunks : [text]) {
     const jsonStart = chunk.indexOf("{")

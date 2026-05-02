@@ -1,9 +1,24 @@
 import type { GiftEvent } from "../../engine/event-bus"
 
-export function parseBroadcastGift(message: any): GiftEvent | null {
-  if (message?.cmd !== "SEND_GIFT" || !message.data) return null
+interface BroadcastGiftMessage {
+  cmd: string
+  data?: {
+    giftId: number
+    giftName: string
+    coin_type: string
+    price: number
+    num: number
+    uid: number
+    uname: string
+    timestamp: number
+  }
+}
 
-  const d = message.data
+export function parseBroadcastGift(message: unknown): GiftEvent | null {
+  const m = message as BroadcastGiftMessage | null
+  if (m?.cmd !== "SEND_GIFT" || !m.data) return null
+
+  const d = m.data
   return {
     giftId: d.giftId,
     giftName: d.giftName,

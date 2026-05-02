@@ -24,18 +24,24 @@ function signWbi(params: Record<string, unknown>, mixinKey: string): string {
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-async function apiGet(url: string, headers: Record<string, string> = {}) {
+interface BiliResponse<T> { code: number; data: T }
+interface SpiData { b_3: string }
+interface RoomInitData { room_id: number }
+interface NavData { wbi_img: { img_url: string; sub_url: string } }
+interface DanmuInfoData { token: string; host_list: { host: string }[] }
+
+async function apiGet<T>(url: string, headers: Record<string, string> = {}): Promise<T> {
   const res = await fetch(url, { headers: { "User-Agent": UA, ...headers } })
-  return res.json()
+  return res.json() as Promise<T>
 }
 
 async function getBuvid3(): Promise<string> {
-  const spi: any = await apiGet("https://api.bilibili.com/x/frontend/finger/spi")
+  const spi = await apiGet<BiliResponse<SpiData>>("https://api.bilibili.com/x/frontend/finger/spi")
   return spi.data.b_3
 }
 
 async function resolveRoomId(roomId: number): Promise<number> {
-  const res: any = await apiGet(`https://api.live.bilibili.com/room/v1/Room/mobileRoomInit?id=${roomId}`)
+  const res = await apiGet<BiliResponse<RoomInitData>>(`https://api.live.bilibili.com/room/v1/Room/mobileRoomInit?id=${roomId}`)
   return res.data.room_id
 }
 
@@ -43,26 +49,25 @@ export async function fetchDanmuInfo(roomId: number): Promise<{ key: string; url
   const buvid3 = await getBuvid3()
   const longRoomId = await resolveRoomId(roomId)
 
-  const nav: any = await apiGet("https://api.bilibili.com/x/web-interface/nav", {
+  const nav = await apiGet<BiliResponse<NavData>>("https://api.bilibili.com/x/web-interface/nav", {
     Cookie: `buvid3=${buvid3}`,
   })
   const { img_url, sub_url } = nav.data.wbi_img
-  const imgKey = img_url.split("/").pop().split(".")[0]
-  const subKey = sub_url.split("/").pop().split(".")[0]
+  const imgKey = img_url.split("/").pop()!.split(".")[0]
+  const subKey = sub_url.split("/").pop()!.split(".")[0]
   const mixinKey = getMixinKey(imgKey + subKey)
 
   const signed = signWbi({ id: longRoomId }, mixinKey)
-  const danmu: any = await apiGet(
+  const danmu = await apiGet<BiliResponse<DanmuInfoData>>(
     `https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo?${signed}`,
     { Referer: "https://live.bilibili.com/", Cookie: `buvid3=${buvid3}` },
   )
 
   if (danmu.code !== 0) throw new Error(`getDanmuInfo failed: code=${danmu.code}`)
 
-  const { token: key, host_list } = danmu.data
   return {
-    key,
-    urls: host_list.map((host: { host: string }) => `wss://${host.host}/sub`),
+    key: danmu.data.token,
+    urls: danmu.data.host_list.map(host => `wss://${host.host}/sub`),
     roomId: longRoomId,
   }
 }

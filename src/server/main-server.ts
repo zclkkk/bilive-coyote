@@ -1,3 +1,4 @@
+import type { Server, ServerWebSocket } from "bun"
 import type { ConfigStore } from "../config/store"
 import type { EventBus } from "../engine/event-bus"
 import type { CoyoteServer } from "../coyote/server"
@@ -7,13 +8,15 @@ import { ValidationError } from "../config/schema"
 import { createRouter, matchRoute } from "./router"
 import panel from "../../public/index.html"
 
+type PanelWs = ServerWebSocket<{ channel: "panel" }>
+
 export class MainServer {
   private config: ConfigStore
   private eventBus: EventBus
   private strengthMgr: StrengthManager
   private routes: Map<string, (req: Request, url: URL) => Promise<Response> | Response>
-  private panelClients: Set<any> = new Set()
-  private server: any = null
+  private panelClients: Set<PanelWs> = new Set()
+  private server: Server<{ channel: "panel" }> | null = null
 
   constructor(
     config: ConfigStore,
@@ -32,7 +35,7 @@ export class MainServer {
   async start(): Promise<void> {
     const { httpPort, host } = this.config.server
 
-    this.server = Bun.serve({
+    this.server = Bun.serve<{ channel: "panel" }>({
       port: httpPort,
       hostname: host,
       routes: {
@@ -49,11 +52,11 @@ export class MainServer {
     console.log(`[Server] HTTP + WS started on http://${host}:${httpPort}`)
   }
 
-  private async handleRequest(req: Request, server: any): Promise<Response> {
+  private async handleRequest(req: Request, server: Server<{ channel: "panel" }>): Promise<Response> {
     const url = new URL(req.url)
 
     if (url.pathname === "/ws/panel") {
-      if (server.upgrade(req, { data: { channel: "panel" } } as any)) return new Response(null)
+      if (server.upgrade(req, { data: { channel: "panel" } })) return new Response(null)
       return new Response("WS upgrade failed", { status: 500 })
     }
 
@@ -75,14 +78,11 @@ export class MainServer {
     return new Response("Not found", { status: 404 })
   }
 
-  private onWsOpen(ws: any): void {
-    const channel = ws.data?.channel
-    if (channel === "panel") {
-      this.panelClients.add(ws)
-    }
+  private onWsOpen(ws: PanelWs): void {
+    if (ws.data.channel === "panel") this.panelClients.add(ws)
   }
 
-  private onWsClose(ws: any): void {
+  private onWsClose(ws: PanelWs): void {
     this.panelClients.delete(ws)
   }
 
@@ -111,7 +111,7 @@ export class MainServer {
     })
   }
 
-  private broadcast(data: any): void {
+  private broadcast(data: unknown): void {
     const msg = JSON.stringify(data)
     for (const ws of this.panelClients) ws.send(msg)
   }
