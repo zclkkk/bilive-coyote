@@ -23,8 +23,8 @@ export class GiftMapper {
   }
 
   private matchRule(rule: GiftRule, gift: GiftEvent): boolean {
-    if (rule.giftId && gift.giftId !== rule.giftId) return false
-    if (rule.giftName && gift.giftName !== rule.giftName) return false
+    if (rule.giftId !== undefined && gift.giftId !== rule.giftId) return false
+    if (gift.giftName !== rule.giftName) return false
     if (rule.coinType !== "all" && rule.coinType !== gift.coinType) return false
     return true
   }

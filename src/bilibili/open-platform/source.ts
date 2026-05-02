@@ -64,24 +64,17 @@ export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
   }
 
   async stop(): Promise<void> {
-    if (!this.gameId && !this.roomId && !this.socketStatus.connected) return
-
     const gameId = this.gameId
-    if (gameId) {
-      try {
-        await this.request("/v2/app/end", { game_id: gameId, app_id: this.appId })
-      } catch (e) {
-        console.error("[Bilibili/OpenPlatform] Failed to end game:", e)
-      }
-    }
+    const appId = this.appId
+    this.reset()
+    if (!gameId) return
 
     try {
-      await this.config.set({ bilibili: { openPlatform: { gameId: "" } } })
+      await this.request("/v2/app/end", { game_id: gameId, app_id: appId })
     } catch (e) {
-      console.error("[Bilibili/OpenPlatform] Failed to clear gameId in config:", e)
+      console.error("[Bilibili/OpenPlatform] Failed to end game:", e)
     }
-
-    this.reset()
+    await this.config.set({ bilibili: { openPlatform: { gameId: "" } } })
   }
 
   getStatus(): BilibiliStatus {

@@ -2,7 +2,6 @@ import { ConfigStore } from "../config/store"
 import type { CoyoteServer } from "../coyote/server"
 import type { StrengthManager } from "../engine/strength-manager"
 import type { BilibiliService } from "../bilibili/service"
-import type { BilibiliStartInput } from "../bilibili/types"
 import { validateBilibiliStart, validateManualStrength } from "../config/schema"
 
 export function createRouter(
@@ -27,31 +26,9 @@ export function createRouter(
   })
 
   routes.set("POST /api/bilibili/start", async (req) => {
-    const body = validateBilibiliStart(await req.json(), config.bilibili.source)
-    let input: BilibiliStartInput
-
-    if (body.source === "open-platform") {
-      const openPlatform = config.bilibili.openPlatform
-      const code = body.code ?? openPlatform.code
-      const appId = body.appId ?? openPlatform.appId
-      const appKey = body.appKey ?? openPlatform.appKey
-      const appSecret = body.appSecret ?? openPlatform.appSecret
-      if (!code || !appId || !appKey || !appSecret) {
-        return Response.json({ error: "code, appId, appKey and appSecret required" }, { status: 400 })
-      }
-      input = { source: body.source, code, appId, appKey, appSecret }
-    } else {
-      const roomId = body.roomId ?? config.bilibili.broadcast.roomId
-      if (!roomId) return Response.json({ error: "roomId required" }, { status: 400 })
-      input = { source: body.source, roomId }
-    }
-
-    try {
-      await bilibili.start(input)
-      return Response.json({ success: true })
-    } catch (e: any) {
-      return Response.json({ error: e.message }, { status: 500 })
-    }
+    const input = validateBilibiliStart(await req.json(), config.bilibili.source)
+    await bilibili.start(input)
+    return Response.json({ success: true })
   })
 
   routes.set("POST /api/bilibili/stop", async () => {
@@ -91,11 +68,8 @@ export function createRouter(
   })
 
   routes.set("PUT /api/config", async (req) => {
-    const body = await req.json()
-    await config.set(body)
-    if (body && typeof body === "object" && "safety" in body) {
-      strengthMgr.enforceLimits()
-    }
+    await config.set(await req.json())
+    strengthMgr.enforceLimits()
     return Response.json({ success: true })
   })
 

@@ -113,13 +113,7 @@ export class MainServer {
 
   private broadcast(data: any): void {
     const msg = JSON.stringify(data)
-    for (const ws of this.panelClients) {
-      try {
-        ws.send(msg)
-      } catch (e) {
-        console.error("[Server] Panel broadcast send failed:", e)
-      }
-    }
+    for (const ws of this.panelClients) ws.send(msg)
   }
 
   stop(): void {

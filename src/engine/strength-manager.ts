@@ -74,12 +74,10 @@ export class StrengthManager {
       const actualDelta = newValue - this.channels[ch].value
       if (actualDelta > 0) {
         this.channels[ch].value = newValue
-        if (e.giftName) {
-          this.channels[ch].expiries.push({
-            until: Date.now() + (e.duration || 10) * 1000,
-            delta: actualDelta,
-          })
-        }
+        this.channels[ch].expiries.push({
+          until: Date.now() + e.duration! * 1000,
+          delta: actualDelta,
+        })
       }
     } else if (e.source === "manual") {
       this.channels[ch].value = Math.min(Math.max(this.channels[ch].value + e.delta, 0), limit)
