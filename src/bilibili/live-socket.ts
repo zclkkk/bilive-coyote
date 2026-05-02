@@ -1,5 +1,4 @@
 import { brotliDecompressSync, inflateSync } from "zlib"
-import type { BilibiliStatusEvent } from "../engine/event-bus"
 
 const WS_OP_HEARTBEAT = 2
 const WS_OP_HEARTBEAT_REPLY = 3
@@ -16,13 +15,19 @@ const RECONNECT_BASE_MS = 3000
 const RECONNECT_MAX_MS = 60000
 const MAX_RECONNECT_ATTEMPTS = 5
 
+export interface LiveSocketStatus {
+  connected: boolean
+  roomId?: number
+  error?: string
+}
+
 interface LiveSocketOptions {
   label: string
   urls: string[]
   auth: Record<string, unknown>
   roomId?: number | null
   onMessage: (message: any) => void
-  onStatus: (status: BilibiliStatusEvent) => void
+  onStatus: (status: LiveSocketStatus) => void
 }
 
 export class BilibiliLiveSocket {
@@ -65,7 +70,7 @@ export class BilibiliLiveSocket {
     if (ws) ws.close()
   }
 
-  getStatus(): BilibiliStatusEvent {
+  getStatus(): LiveSocketStatus {
     return {
       connected: this.connected,
       roomId: this.options?.roomId ?? undefined,

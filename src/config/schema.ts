@@ -1,4 +1,5 @@
-import type { AppConfig, GiftRule } from "./types"
+import { BILIBILI_SOURCE_TYPES, type AppConfig, type BilibiliSourceType, type GiftRule } from "./types"
+import type { BilibiliStartInput } from "../bilibili/types"
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -10,7 +11,7 @@ export class ValidationError extends Error {
 const COIN_TYPES = new Set(["gold", "silver", "all"])
 const RULE_CHANNELS = new Set(["A", "B", "both"])
 const STRENGTH_CHANNELS = new Set(["A", "B"])
-const BILIBILI_SOURCES = new Set(["open-platform", "broadcast"])
+const BILIBILI_SOURCES = new Set<string>(BILIBILI_SOURCE_TYPES)
 
 export function validateConfig(value: unknown): AppConfig {
   const data = object(value, "config")
@@ -66,21 +67,22 @@ export function validateManualStrength(value: unknown): { channel: "A" | "B"; va
   }
 }
 
-export function validateBilibiliStart(value: unknown): {
-  source?: AppConfig["bilibili"]["source"]
-  code?: string
-  appId?: number
-  appKey?: string
-  appSecret?: string
-  roomId?: number
-} {
+export function validateBilibiliStart(value: unknown, defaultSource: BilibiliSourceType): BilibiliStartInput {
   const data = object(value, "body")
+  const source = (optionalEnumString(data.source, "source", BILIBILI_SOURCES) ?? defaultSource) as BilibiliSourceType
+
+  if (source === "open-platform") {
+    return {
+      source,
+      code: optionalNonEmptyString(data.code, "code"),
+      appId: optionalInteger(data.appId, "appId", 1),
+      appKey: optionalNonEmptyString(data.appKey, "appKey"),
+      appSecret: optionalNonEmptyString(data.appSecret, "appSecret"),
+    }
+  }
+
   return {
-    source: optionalEnumString(data.source, "source", BILIBILI_SOURCES) as AppConfig["bilibili"]["source"] | undefined,
-    code: optionalNonEmptyString(data.code, "code"),
-    appId: optionalInteger(data.appId, "appId", 1),
-    appKey: optionalNonEmptyString(data.appKey, "appKey"),
-    appSecret: optionalNonEmptyString(data.appSecret, "appSecret"),
+    source,
     roomId: optionalInteger(data.roomId, "roomId", 1),
   }
 }

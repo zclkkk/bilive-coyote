@@ -7,7 +7,8 @@ export interface GiftRule {
   duration: number
 }
 
-export type BilibiliSourceType = "open-platform" | "broadcast"
+export const BILIBILI_SOURCE_TYPES = ["open-platform", "broadcast"] as const
+export type BilibiliSourceType = typeof BILIBILI_SOURCE_TYPES[number]
 
 export interface AppConfig {
   bilibili: {
