@@ -6,6 +6,7 @@ import type { CoyoteServer } from "../coyote/server"
 import type { StrengthManager } from "../engine/strength-manager"
 import type { BilibiliClient } from "../bilibili/api"
 import type { DanmakuWS } from "../bilibili/danmaku-ws"
+import { ValidationError } from "../config/schema"
 import { createRouter, matchRoute } from "./router"
 
 const MIME_TYPES: Record<string, string> = {
@@ -90,6 +91,9 @@ export class MainServer {
         try {
           return await handler(req, url)
         } catch (e: any) {
+          if (e instanceof ValidationError) {
+            return Response.json({ error: e.message }, { status: 400 })
+          }
           return Response.json({ error: e.message }, { status: 500 })
         }
       }

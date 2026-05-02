@@ -1,4 +1,5 @@
 import { AppConfig, DEFAULT_CONFIG } from "./types"
+import { ValidationError, validateConfig, validateRules } from "./schema"
 import { existsSync, readFileSync } from "fs"
 import { resolve, isAbsolute } from "path"
 
@@ -14,12 +15,12 @@ export class ConfigStore {
     } else {
       this.filePath = resolve(process.cwd(), "config.json")
     }
-    this.data = { ...DEFAULT_CONFIG }
+    this.data = validateConfig(DEFAULT_CONFIG)
     if (existsSync(this.filePath)) {
       try {
         const content = readFileSync(this.filePath, "utf-8")
         const parsed = JSON.parse(content)
-        this.data = deepMerge(this.data, parsed)
+        this.data = validateConfig(deepMerge(this.data, parsed))
       } catch (e) {
         console.error(`[Config] Failed to parse ${this.filePath}:`, e)
       }
@@ -50,19 +51,26 @@ export class ConfigStore {
     return this.data.safety
   }
 
-  async set(partial: Partial<AppConfig>): Promise<void> {
-    this.data = deepMerge(this.data, partial)
+  async set(partial: unknown): Promise<void> {
+    this.data = validateConfig(deepMerge(this.data, partialObject(partial)))
     await this.save()
   }
 
-  async setRules(rules: AppConfig["rules"]): Promise<void> {
-    this.data.rules = rules
+  async setRules(rules: unknown): Promise<void> {
+    this.data.rules = validateRules(rules)
     await this.save()
   }
 
   async save(): Promise<void> {
     await Bun.write(this.filePath, JSON.stringify(this.data, null, 2))
   }
+}
+
+function partialObject(value: unknown): Partial<AppConfig> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ValidationError("config patch must be an object")
+  }
+  return value as Partial<AppConfig>
 }
 
 function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {

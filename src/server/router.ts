@@ -3,6 +3,7 @@ import { EventBus } from "../engine/event-bus"
 import type { CoyoteServer } from "../coyote/server"
 import type { StrengthManager } from "../engine/strength-manager"
 import type { BilibiliClient } from "../bilibili/api"
+import { validateBilibiliStart, validateManualStrength } from "../config/schema"
 
 export function createRouter(
   config: ConfigStore,
@@ -27,7 +28,7 @@ export function createRouter(
   })
 
   routes.set("POST /api/bilibili/start", async (req) => {
-    const body = await req.json() as { code?: string; appId?: number; appKey?: string; appSecret?: string }
+    const body = validateBilibiliStart(await req.json())
     const code = body.code || config.bilibili.code
     const appId = body.appId || config.bilibili.appId
     if (!code || !appId) {
@@ -66,10 +67,7 @@ export function createRouter(
   })
 
   routes.set("POST /api/coyote/strength", async (req) => {
-    const body = await req.json() as { channel: "A" | "B"; value: number }
-    if (!body.channel || body.value === undefined) {
-      return Response.json({ error: "channel and value required" }, { status: 400 })
-    }
+    const body = validateManualStrength(await req.json())
     strengthMgr.setManualStrength(body.channel, body.value)
     return Response.json({ success: true })
   })
@@ -86,7 +84,7 @@ export function createRouter(
   routes.set("PUT /api/config", async (req) => {
     const body = await req.json()
     await config.set(body)
-    if (body.safety) {
+    if (body && typeof body === "object" && "safety" in body) {
       strengthMgr.enforceLimits()
     }
     return Response.json({ success: true })
