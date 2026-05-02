@@ -8,6 +8,7 @@ const TARGETS = [
   "bun-linux-x64-baseline",
   "bun-linux-arm64",
   "bun-windows-x64-baseline",
+  "bun-windows-arm64",
   "bun-darwin-x64",
   "bun-darwin-arm64",
 ] as const
