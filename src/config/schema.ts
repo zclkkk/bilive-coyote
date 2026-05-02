@@ -10,13 +10,13 @@ export class ValidationError extends Error {
 const COIN_TYPES = new Set(["gold", "silver", "all"])
 const RULE_CHANNELS = new Set(["A", "B", "both"])
 const STRENGTH_CHANNELS = new Set(["A", "B"])
-const BILIBILI_SOURCES = new Set(["open-platform", "viewer"])
+const BILIBILI_SOURCES = new Set(["open-platform", "broadcast"])
 
 export function validateConfig(value: unknown): AppConfig {
   const data = object(value, "config")
   const bilibili = object(data.bilibili, "bilibili")
   const openPlatform = object(bilibili.openPlatform, "bilibili.openPlatform")
-  const viewer = object(bilibili.viewer, "bilibili.viewer")
+  const broadcastCfg = object(bilibili.broadcast, "bilibili.broadcast")
   const coyote = object(data.coyote, "coyote")
   const server = object(data.server, "server")
   const safety = object(data.safety, "safety")
@@ -31,8 +31,8 @@ export function validateConfig(value: unknown): AppConfig {
         appId: integer(openPlatform.appId, "bilibili.openPlatform.appId", 0),
         gameId: string(openPlatform.gameId ?? "", "bilibili.openPlatform.gameId"),
       },
-      viewer: {
-        roomId: integer(viewer.roomId, "bilibili.viewer.roomId", 0),
+      broadcast: {
+        roomId: integer(broadcastCfg.roomId, "bilibili.broadcast.roomId", 0),
       },
     },
     coyote: {

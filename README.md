@@ -28,7 +28,7 @@ bun run start
 
 ## 使用流程
 
-1. 在控制面板填写 B站开放平台的 **AppKey**、**AppSecret**、**主播身份码**、**App ID**
+1. 在控制面板选择 B站数据源：开放平台填写 **AppKey**、**AppSecret**、**主播身份码**、**App ID**；Broadcast 填写直播间房间号
 2. 点击「开始监听」连接直播间
 3. 在 Coyote 配对区域扫描二维码，用 DG-LAB APP 完成配对
 4. 配置礼物规则（礼物名 → 通道 → 强度增量 → 持续时间）
@@ -41,6 +41,7 @@ bun run start
 | 运行时 | Bun |
 | 语言 | TypeScript |
 | HTTP/WS | Bun.serve() 内置 |
+| B站数据源 | 开放平台 / Broadcast 观众端 WS |
 | 弹幕协议 | 自实现二进制协议解析 + Deflate/Brotli 解压 |
 | 前端 | 原生 HTML + CSS + JS (Bun HTML import 打包) |
 | 外部依赖 | qrcode (唯一) |
@@ -55,6 +56,7 @@ src/
     live-socket.ts       # 直播 WS 传输/解压/重连
     types.ts             # 数据源接口
     open-platform/       # B站开放平台数据源实现
+    broadcast/           # B站 Broadcast 观众端 WS 数据源实现
   coyote/
     server.ts            # DG-LAB WS 服务端 (端口 9999)
     message.ts           # 消息解析与构造

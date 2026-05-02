@@ -38,8 +38,8 @@ export function createRouter(
         return Response.json({ error: "code, appId, appKey and appSecret required" }, { status: 400 })
       }
     }
-    if (source === "viewer") {
-      const roomId = body.roomId ?? config.bilibili.viewer.roomId
+    if (source === "broadcast") {
+      const roomId = body.roomId ?? config.bilibili.broadcast.roomId
       if (!roomId) return Response.json({ error: "roomId required" }, { status: 400 })
     }
     try {

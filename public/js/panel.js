@@ -48,11 +48,18 @@ async function loadStatus() {
 }
 
 function renderConfig() {
-  const b = currentConfig.bilibili?.openPlatform || {}
-  $("#appKey").value = b.appKey || ""
-  $("#appSecret").value = b.appSecret || ""
-  $("#code").value = b.code || ""
-  $("#appId").value = b.appId || ""
+  const b = currentConfig.bilibili || {}
+  const op = b.openPlatform || {}
+  const bc = b.broadcast || {}
+
+  $("#source-type").value = b.source || "open-platform"
+  toggleSourceFields(b.source || "open-platform")
+
+  $("#appKey").value = op.appKey || ""
+  $("#appSecret").value = op.appSecret || ""
+  $("#code").value = op.code || ""
+  $("#appId").value = op.appId || ""
+  $("#roomId").value = bc.roomId || ""
 
   const s = currentConfig.safety || {}
   $("#limitA").value = s.limitA ?? 80
@@ -60,6 +67,12 @@ function renderConfig() {
   $("#decayEnabled").checked = s.decayEnabled !== false
   $("#decayRate").value = s.decayRate ?? 2
   updateLimitHints()
+}
+
+function toggleSourceFields(source) {
+  const isOP = source === "open-platform"
+  $("#op-fields").style.display = isOP ? "" : "none"
+  $("#bc-fields").style.display = isOP ? "none" : ""
 }
 
 function updateLimitHints() {
@@ -110,6 +123,10 @@ function setupEventListeners() {
     await api.coyote.emergency()
   }
 
+  $("#source-type").onchange = () => {
+    toggleSourceFields($("#source-type").value)
+  }
+
   $("#zero-btn").onclick = async () => {
     await api.coyote.strength("A", 0)
     await api.coyote.strength("B", 0)
@@ -133,17 +150,32 @@ function setupEventListeners() {
   })
 
   $("#bilibili-start").onclick = async () => {
-    const appKey = $("#appKey").value.trim()
-    const appSecret = $("#appSecret").value.trim()
-    const code = $("#code").value.trim()
-    const appId = parseInt($("#appId").value)
+    const source = $("#source-type").value
+    let params
 
-    if (!appKey || !appSecret) {
-      alert("请填写 AppKey 和 AppSecret")
-      return
-    }
-    if (!code || !appId) {
-      alert("请填写主播身份码和 App ID")
+    if (source === "open-platform") {
+      const appKey = $("#appKey").value.trim()
+      const appSecret = $("#appSecret").value.trim()
+      const code = $("#code").value.trim()
+      const appId = parseInt($("#appId").value)
+
+      if (!appKey || !appSecret) {
+        alert("请填写 AppKey 和 AppSecret")
+        return
+      }
+      if (!code || !appId) {
+        alert("请填写主播身份码和 App ID")
+        return
+      }
+      params = { source, code, appId, appKey, appSecret }
+    } else if (source === "broadcast") {
+      const roomId = parseInt($("#roomId").value)
+      if (!roomId) {
+        alert("请填写房间号")
+        return
+      }
+      params = { source, roomId }
+    } else {
       return
     }
 
@@ -152,9 +184,9 @@ function setupEventListeners() {
     startBtn.disabled = true
 
     try {
-      const startResult = await api.bilibili.start("open-platform", code, appId, appKey, appSecret)
-      if (startResult.error) {
-        alert("连接失败: " + startResult.error)
+      const res = await api.bilibili.start(params)
+      if (res.error) {
+        alert("连接失败: " + res.error)
         return
       }
     } catch (e) {

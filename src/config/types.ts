@@ -7,7 +7,7 @@ export interface GiftRule {
   duration: number
 }
 
-export type BilibiliSourceType = "open-platform" | "viewer"
+export type BilibiliSourceType = "open-platform" | "broadcast"
 
 export interface AppConfig {
   bilibili: {
@@ -20,7 +20,7 @@ export interface AppConfig {
       /** 上次 start 得到的 game_id；进程重启后用于清理残留会话，正常 end 后置空 */
       gameId?: string
     }
-    viewer: {
+    broadcast: {
       roomId: number
     }
   }
@@ -50,7 +50,7 @@ export const DEFAULT_CONFIG: AppConfig = {
       appId: 0,
       gameId: "",
     },
-    viewer: {
+    broadcast: {
       roomId: 0,
     },
   },
