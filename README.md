@@ -9,7 +9,7 @@ Bilibili 直播礼物 → DG-LAB Coyote 强度桥接。
 - 🎁 B站直播间礼物实时触发 Coyote 强度变化
 - 📱 Web 控制面板，手机/PC 均可访问
 - 🔒 强度上限/衰减/紧急停止
-- 🌍 跨平台：Windows / Linux / macOS（Bun 运行时）
+- 🌍 跨平台：Windows / Linux / macOS（单文件可执行程序）
 
 ## 快速开始
 
@@ -21,7 +21,7 @@ curl -fsSL https://bun.sh/install | bash
 bun install
 
 # 启动
-bun run src/main.ts
+bun run start
 ```
 
 打开 `http://localhost:3000` 进入控制面板。
@@ -42,7 +42,7 @@ bun run src/main.ts
 | 语言 | TypeScript |
 | HTTP/WS | Bun.serve() 内置 |
 | 弹幕协议 | 自实现二进制协议解析 + Deflate/Brotli 解压 |
-| 前端 | 原生 HTML + CSS + JS (ES Module, 零构建) |
+| 前端 | 原生 HTML + CSS + JS (Bun HTML import 打包) |
 | 外部依赖 | qrcode (唯一) |
 
 ## 项目结构
@@ -69,10 +69,12 @@ src/
   config/
     types.ts             # 配置类型定义
     store.ts             # 配置持久化
-public/
+public/                   # 控制面板源码，构建时内嵌到可执行程序
   index.html             # 控制面板
   css/                   # 样式
   js/                    # 前端逻辑
+scripts/
+  build.ts               # 单文件可执行程序构建
 ```
 
 ## API
@@ -111,8 +113,13 @@ public/
 
 ```bash
 # 开发模式 (热重载)
-bun run --watch src/main.ts
+bun run dev
 
-# 编译为单二进制
-bun build src/main.ts --compile --outfile bilive-coyote
+# 构建当前平台单文件可执行程序到 dist/
+bun run build
+
+# 构建时前端资源会内嵌到可执行程序，不需要携带 public/ 目录
+
+# 构建常见平台
+bun run build:all
 ```

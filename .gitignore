@@ -4,5 +4,10 @@
 # Dependencies
 node_modules/
 
+# Build
+dist/
+bilive-coyote
+bilive-coyote.exe
+
 # Config
 config.json
