@@ -1,26 +1,22 @@
 # Bilive-Coyote
 
-Bilibili 直播礼物 → DG-LAB Coyote 强度桥接。
+Bilibili 直播礼物到 DG-LAB Coyote 强度的局域网桥接工具。
 
-收到直播间礼物后自动增加 Coyote 电击强度。
+收到直播间礼物后，项目会按配置好的礼物规则调整 Coyote A/B 通道强度，并把状态同步到 Web 控制面板。
 
 ## 特性
 
-- 🎁 B站直播间礼物实时触发 Coyote 强度变化
-- 📱 Web 控制面板，手机/PC 均可访问
-- 🔒 强度上限/衰减/紧急停止
-- 🌍 跨平台：Windows / Linux / macOS（单文件可执行程序）
+- Bilibili 礼物实时监听
+- 支持开放平台和 Broadcast 观众端 WS 两种数据源
+- DG-LAB APP 扫码配对，局域网手机/PC 控制面板
+- 强度上限、APP 上限反馈、衰减、紧急停止
+- Bun 单文件可执行程序分发
 
 ## 快速开始
 
 ```bash
-# 安装 Bun (如果没装)
 curl -fsSL https://bun.sh/install | bash
-
-# 安装依赖
 bun install
-
-# 启动
 bun run start
 ```
 
@@ -28,11 +24,27 @@ bun run start
 
 ## 使用流程
 
-1. 在控制面板选择 B站数据源：开放平台填写 **AppKey**、**AppSecret**、**主播身份码**、**App ID**；Broadcast 填写直播间房间号
-2. 点击「开始监听」连接直播间
-3. 在 Coyote 配对区域扫描二维码，用 DG-LAB APP 完成配对
-4. 配置礼物规则（礼物名 → 通道 → 强度增量 → 持续时间）
-5. 观众送礼 → 强度自动变化
+1. 选择 Bilibili 数据源。
+2. 开放平台填写 `AppKey`、`AppSecret`、主播身份码、`App ID`；Broadcast 填写直播间房间号。
+3. 点击「开始监听」。
+4. 用 DG-LAB APP 扫描 Coyote 配对二维码。
+5. 配置礼物规则。
+
+## 常用命令
+
+```bash
+bun run dev
+bun run check
+bun run build
+bun run build:all
+```
+
+## 文档
+
+- [安装与分发](docs/setup.md)
+- [Bilibili 数据源](docs/bilibili-sources.md)
+- [DG-LAB Coyote](docs/coyote.md)
+- [开发与架构](docs/development.md)
 
 ## 技术栈
 
@@ -40,88 +52,7 @@ bun run start
 |---|---|
 | 运行时 | Bun |
 | 语言 | TypeScript |
-| HTTP/WS | Bun.serve() 内置 |
-| B站数据源 | 开放平台 / Broadcast 观众端 WS |
-| 弹幕协议 | 自实现二进制协议解析 + Deflate/Brotli 解压 |
-| 前端 | 原生 HTML + CSS + JS (Bun HTML import 打包) |
-| 外部依赖 | qrcode (唯一) |
-
-## 项目结构
-
-```
-src/
-  main.ts                # 入口
-  bilibili/
-    service.ts           # B站数据源门面
-    live-socket.ts       # 直播 WS 传输/解压/重连
-    types.ts             # 数据源接口
-    open-platform/       # B站开放平台数据源实现
-    broadcast/           # B站 Broadcast 观众端 WS 数据源实现
-  coyote/
-    server.ts            # DG-LAB WS 服务端 (端口 9999)
-    message.ts           # 消息解析与构造
-    error-codes.ts       # 协议错误码
-  engine/
-    event-bus.ts         # 类型安全事件总线
-    gift-mapper.ts       # 礼物→强度映射
-    strength-manager.ts  # 强度管理 + 衰减
-  server/
-    main-server.ts       # 主服务 (端口 3000)
-    router.ts            # REST API 路由
-  config/
-    types.ts             # 配置类型定义
-    store.ts             # 配置持久化
-public/                   # 控制面板源码，构建时内嵌到可执行程序
-  index.html             # 控制面板
-  css/                   # 样式
-  js/                    # 前端逻辑
-scripts/
-  build.ts               # 单文件可执行程序构建
-```
-
-## API
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| POST | /api/bilibili/start | 开始监听直播间 |
-| POST | /api/bilibili/stop | 停止监听 |
-| GET | /api/bilibili/status | B站连接状态 |
-| GET | /api/coyote/status | Coyote 配对状态 |
-| GET | /api/coyote/qrcode | 配对二维码 (Base64) |
-| POST | /api/coyote/strength | 手动设置强度 |
-| POST | /api/coyote/emergency | 紧急停止 |
-| GET | /api/config | 获取配置 |
-| PUT | /api/config | 更新配置 |
-| GET | /api/config/rules | 获取礼物规则 |
-| PUT | /api/config/rules | 更新礼物规则 |
-
-## 安全机制
-
-- **强度上限**：A/B 通道强度不可超越的上限 (0-200)，取 min(本端设置, APP端上限)
-- **衰减**：礼物效果到期后逐步衰减回基线
-- **紧急停止**：一键归零所有通道
-- **断连保护**：Coyote WS 断连时自动归零
-
-## 数据流
-
-```
-直播间礼物 → B站数据源 → GiftEvent → EventBus
-  → GiftMapper匹配规则 → StrengthManager(安全限制+衰减)
-    → CoyoteServer → DG-LAB APP → 蓝牙 → 设备
-    → PanelWS → 控制面板
-```
-
-## 开发
-
-```bash
-# 开发模式 (热重载)
-bun run dev
-
-# 构建当前平台单文件可执行程序到 dist/
-bun run build
-
-# 构建时前端资源会内嵌到可执行程序，不需要携带 public/ 目录
-
-# 构建常见平台
-bun run build:all
-```
+| HTTP/WS | Bun.serve() |
+| Bilibili | 开放平台 / Broadcast 观众端 WS |
+| Coyote | DG-LAB App WebSocket 协议 |
+| 前端 | 原生 HTML + CSS + JS，Bun HTML import 打包 |
