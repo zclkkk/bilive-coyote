@@ -67,13 +67,7 @@ export class BilibiliClient {
 
     const data = await this.request("/v2/app/start", { code, app_id: appId })
     if (data.code === 7002) {
-      console.log("[Bilibili] Room already has a game, trying to end and restart...")
-      await this.request("/v2/app/end", { game_id: "", app_id: appId })
-      const retryData = await this.request("/v2/app/start", { code, app_id: appId })
-      if (retryData.code !== 0) {
-        throw new Error(`重启失败: ${retryData.message || retryData.code}`)
-      }
-      return await this.handleStartSuccess(retryData.data, code, appId)
+      throw new Error("直播间已有互动玩法会话，请先结束已有会话后重试")
     }
     if (data.code === 7001) {
       throw new Error(`请求冷却期：上一个会话未正常结束，请稍后 (约 30-60s) 重试`)
