@@ -9,8 +9,14 @@ const $$ = (sel) => document.querySelectorAll(sel)
 
 let currentConfig = {}
 let currentRules = []
-let appLimits = { a: 200, b: 200 }
-let lastStrengthA = 0, lastStrengthB = 0
+const state = {
+  strengthA: 0,
+  strengthB: 0,
+  appLimitA: 200,
+  appLimitB: 200,
+  effectiveLimitA: 200,
+  effectiveLimitB: 200,
+}
 let qrLoaded = false
 
 async function init() {
@@ -37,14 +43,15 @@ async function loadStatus() {
     updateBilibiliStatus(status.bilibili)
     updateCoyoteStatus(status.coyote)
     if (status.strength) {
-      if (status.strength.appLimitA !== undefined) {
-        appLimits.a = status.strength.appLimitA
-        appLimits.b = status.strength.appLimitB
-        updateLimitHints()
-      }
-      updateStrengthBars(status.strength.a, status.strength.b)
+      const s = status.strength
+      applyLimits(s.appLimitA, s.appLimitB, s.effectiveLimitA, s.effectiveLimitB)
+      state.strengthA = Math.min(s.a, state.effectiveLimitA)
+      state.strengthB = Math.min(s.b, state.effectiveLimitB)
+      renderStrength()
     }
-  } catch {}
+  } catch (e) {
+    console.error("Load status failed:", e)
+  }
 }
 
 function renderConfig() {
@@ -66,7 +73,7 @@ function renderConfig() {
   $("#limitB").value = s.limitB ?? 80
   $("#decayEnabled").checked = s.decayEnabled !== false
   $("#decayRate").value = s.decayRate ?? 2
-  updateLimitHints()
+  renderLimitHints()
 }
 
 function toggleSourceFields(source) {
@@ -75,22 +82,27 @@ function toggleSourceFields(source) {
   $("#bc-fields").style.display = isOP ? "none" : ""
 }
 
-function updateLimitHints() {
-  const setHint = (id, appLimit) => {
-    const el = $(id)
-    if (el) el.textContent = `(APP上限: ${appLimit})`
+function applyLimits(appA, appB, effA, effB) {
+  if (appA !== undefined) {
+    state.appLimitA = appA
+    state.appLimitB = appB
+    const elA = $("#app-limit-a")
+    const elB = $("#app-limit-b")
+    if (elA) elA.textContent = appA
+    if (elB) elB.textContent = appB
   }
-  setHint("#hint-limitA", appLimits.a)
-  setHint("#hint-limitB", appLimits.b)
+  if (effA !== undefined) {
+    state.effectiveLimitA = effA
+    state.effectiveLimitB = effB
+  }
+  renderLimitHints()
 }
 
-function safetyLimit(channel) {
-  const safety = currentConfig.safety || {}
-  return channel === "A" ? (safety.limitA ?? 80) : (safety.limitB ?? 80)
-}
-
-function effectiveLimit(channel) {
-  return Math.min(safetyLimit(channel), appLimits[channel.toLowerCase()])
+function renderLimitHints() {
+  const elA = $("#hint-limitA")
+  const elB = $("#hint-limitB")
+  if (elA) elA.textContent = `(APP上限: ${state.appLimitA})`
+  if (elB) elB.textContent = `(APP上限: ${state.appLimitB})`
 }
 
 function renderRules() {
@@ -132,65 +144,30 @@ function setupEventListeners() {
     await api.coyote.strength("B", 0)
   }
 
+  const deltas = { inc: 1, inc5: 5, dec: -1, dec5: -5 }
   $$("[data-channel][data-action]").forEach(btn => {
     btn.onclick = () => {
       const ch = btn.dataset.channel
-      const action = btn.dataset.action
-      let delta = 0
-      switch (action) {
-        case "inc": delta = 1; break
-        case "inc5": delta = 5; break
-        case "dec": delta = -1; break
-        case "dec5": delta = -5; break
-      }
-      const current = ch === "A" ? lastStrengthA : lastStrengthB
-      const newVal = Math.max(0, Math.min(current + delta, effectiveLimit(ch)))
+      const delta = deltas[btn.dataset.action] ?? 0
+      const current = ch === "A" ? state.strengthA : state.strengthB
+      const limit = ch === "A" ? state.effectiveLimitA : state.effectiveLimitB
+      const newVal = Math.max(0, Math.min(current + delta, limit))
       api.coyote.strength(ch, newVal)
     }
   })
 
   $("#bilibili-start").onclick = async () => {
     const source = $("#source-type").value
-    let params
-
-    if (source === "open-platform") {
-      const appKey = $("#appKey").value.trim()
-      const appSecret = $("#appSecret").value.trim()
-      const code = $("#code").value.trim()
-      const appId = parseInt($("#appId").value)
-
-      if (!appKey || !appSecret) {
-        alert("请填写 AppKey 和 AppSecret")
-        return
-      }
-      if (!code || !appId) {
-        alert("请填写主播身份码和 App ID")
-        return
-      }
-      params = { source, code, appId, appKey, appSecret }
-    } else if (source === "broadcast") {
-      const roomId = parseInt($("#roomId").value)
-      if (!roomId) {
-        alert("请填写房间号")
-        return
-      }
-      params = { source, roomId }
-    } else {
-      return
-    }
+    const params = buildStartParams(source)
+    if (!params) return
 
     const startBtn = $("#bilibili-start")
     startBtn.textContent = "连接中..."
     startBtn.disabled = true
-
     try {
-      const res = await api.bilibili.start(params)
-      if (res.error) {
-        alert("连接失败: " + res.error)
-        return
-      }
+      await api.bilibili.start(params)
     } catch (e) {
-      alert("启动失败: " + (e.message || "未知错误"))
+      alert("启动失败: " + e.message)
     } finally {
       startBtn.textContent = "开始监听"
       startBtn.disabled = false
@@ -240,17 +217,31 @@ function setupEventListeners() {
   }
 }
 
+function buildStartParams(source) {
+  if (source === "open-platform") {
+    const appKey = $("#appKey").value.trim()
+    const appSecret = $("#appSecret").value.trim()
+    const code = $("#code").value.trim()
+    const appId = parseInt($("#appId").value)
+    if (!appKey || !appSecret) { alert("请填写 AppKey 和 AppSecret"); return null }
+    if (!code || !appId) { alert("请填写主播身份码和 App ID"); return null }
+    return { source, code, appId, appKey, appSecret }
+  }
+  const roomId = parseInt($("#roomId").value)
+  if (!roomId) { alert("请填写房间号"); return null }
+  return { source, roomId }
+}
+
 function setupWSEvents() {
   ws.on("bilibili:status", updateBilibiliStatus)
   ws.on("coyote:status", updateCoyoteStatus)
   ws.on("strength", (data) => {
-    updateStrengthBars(
-      data.channel === "A" ? data.value : undefined,
-      data.channel === "B" ? data.value : undefined,
-    )
+    if (data.channel === "A") state.strengthA = Math.min(data.value, state.effectiveLimitA)
+    if (data.channel === "B") state.strengthB = Math.min(data.value, state.effectiveLimitB)
+    renderStrength()
   })
   ws.on("gift", addGiftLog)
-  // 断线重连后重新同步状态，避免错过断开期间的状态变化
+  // 断线重连后重新拉取状态，避免错过断开期间的状态变化
   ws.on("reconnect", async () => {
     console.log("[Panel] Reconnected, refreshing state")
     qrLoaded = false
@@ -276,70 +267,50 @@ function updateCoyoteStatus(data) {
   const text = $("#coyote-text")
   const qrView = $("#qr-view")
   const pairDetail = $("#pair-detail")
+  applyLimits(data.limitA, data.limitB, data.effectiveLimitA, data.effectiveLimitB)
   if (data.paired) {
     dot.className = "status-dot online"
     text.textContent = "已配对"
     qrView.style.display = "none"
     pairDetail.style.display = "block"
+    if (data.strengthA !== undefined) {
+      state.strengthA = Math.min(data.strengthA, state.effectiveLimitA)
+      state.strengthB = Math.min(data.strengthB, state.effectiveLimitB)
+    }
+    renderStrength()
+    renderPairDetail()
   } else {
     dot.className = "status-dot offline"
     text.textContent = "等待配对"
     qrView.style.display = "block"
     pairDetail.style.display = "none"
-    appLimits = { a: 200, b: 200 }
-    const elA = $("#app-limit-a")
-    const elB = $("#app-limit-b")
-    if (elA) elA.textContent = "--"
-    if (elB) elB.textContent = "--"
-    updateLimitHints()
-    updateStrengthBars(0, 0)
+    state.strengthA = 0
+    state.strengthB = 0
+    const elA = $("#app-limit-a"); if (elA) elA.textContent = "--"
+    const elB = $("#app-limit-b"); if (elB) elB.textContent = "--"
+    renderStrength()
     if (!qrLoaded) loadQRCode()
-    return
   }
-  if (data.limitA !== undefined) {
-    appLimits.a = data.limitA
-    appLimits.b = data.limitB
-    const elA = $("#app-limit-a")
-    const elB = $("#app-limit-b")
-    if (elA) elA.textContent = data.limitA
-    if (elB) elB.textContent = data.limitB
-    updateLimitHints()
-  }
-  if (data.strengthA !== undefined) {
-    updateStrengthBars(data.strengthA, data.strengthB)
-  }
-  updatePairDetail()
 }
 
-function updatePairDetail() {
+function renderPairDetail() {
   const elPort = $("#pair-ws-port")
   if (elPort) elPort.textContent = currentConfig.coyote?.wsPort ?? 9999
 }
 
-function updateStrengthBars(a, b) {
-  const limitA = effectiveLimit("A")
-  const limitB = effectiveLimit("B")
-  if (a !== undefined) lastStrengthA = Math.min(a, limitA)
-  if (b !== undefined) lastStrengthB = Math.min(b, limitB)
+function renderStrength() {
+  renderBar("A", state.strengthA, state.effectiveLimitA)
+  renderBar("B", state.strengthB, state.effectiveLimitB)
+}
 
-  const fillA = $("#bar-a-fill")
-  const fillB = $("#bar-b-fill")
-  const valA = $("#bar-a-val")
-  const valB = $("#bar-b-val")
-
-  if (fillA) {
-    fillA.style.width = limitA > 0 ? `${(lastStrengthA / limitA) * 100}%` : "0%"
-    valA.textContent = `${lastStrengthA}/${limitA}`
-  }
-  if (fillB) {
-    fillB.style.width = limitB > 0 ? `${(lastStrengthB / limitB) * 100}%` : "0%"
-    valB.textContent = `${lastStrengthB}/${limitB}`
-  }
-
-  const ctrlA = $("#ctrl-a-val")
-  const ctrlB = $("#ctrl-b-val")
-  if (ctrlA) ctrlA.textContent = lastStrengthA
-  if (ctrlB) ctrlB.textContent = lastStrengthB
+function renderBar(channel, value, limit) {
+  const suffix = channel.toLowerCase()
+  const fill = $(`#bar-${suffix}-fill`)
+  const label = $(`#bar-${suffix}-val`)
+  const ctrl = $(`#ctrl-${suffix}-val`)
+  if (fill) fill.style.width = limit > 0 ? `${(value / limit) * 100}%` : "0%"
+  if (label) label.textContent = `${value}/${limit}`
+  if (ctrl) ctrl.textContent = value
 }
 
 function addGiftLog(data) {
@@ -359,18 +330,14 @@ function addGiftLog(data) {
 
 async function loadQRCode() {
   try {
-    const data = await api.coyote.qrcode()
-    if (data.qrcode) {
-      const img = $("#qr-img")
-      img.src = data.qrcode
-      img.style.display = "block"
-      $("#qr-status").textContent = "用 DG-LAB APP 扫描二维码配对"
-      qrLoaded = true
-    } else {
-      $("#qr-status").textContent = data.error || "二维码生成失败"
-    }
-  } catch {
-    $("#qr-status").textContent = "二维码生成失败"
+    const { qrcode } = await api.coyote.qrcode()
+    const img = $("#qr-img")
+    img.src = qrcode
+    img.style.display = "block"
+    $("#qr-status").textContent = "用 DG-LAB APP 扫描二维码配对"
+    qrLoaded = true
+  } catch (e) {
+    $("#qr-status").textContent = e.message || "二维码生成失败"
   }
 }
 

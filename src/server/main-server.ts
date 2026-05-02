@@ -107,7 +107,14 @@ export class MainServer {
     })
 
     this.eventBus.on("coyote:status", (data) => {
-      this.broadcast({ type: "coyote:status", data })
+      this.broadcast({
+        type: "coyote:status",
+        data: {
+          ...data,
+          effectiveLimitA: this.strengthMgr.getLimit("A"),
+          effectiveLimitB: this.strengthMgr.getLimit("B"),
+        },
+      })
     })
   }
 

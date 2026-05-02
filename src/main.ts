@@ -23,15 +23,6 @@ async function main() {
     console.log("[Bilibili] Status:", status)
   })
 
-  eventBus.on("coyote:status", (status) => {
-    if (status.paired) {
-      strengthMgr.updateAppLimits(status.limitA, status.limitB)
-      strengthMgr.applyAppFeedback(status.strengthA, status.strengthB)
-    } else {
-      strengthMgr.resetLocal()
-    }
-  })
-
   eventBus.on("gift:log", (log) => {
     console.log(`[Gift] ${log.uname} sent ${log.giftName} x${log.num} (${log.strengthDelta})`)
   })

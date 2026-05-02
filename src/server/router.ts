@@ -21,6 +21,8 @@ export function createRouter(
         b: strengthMgr.getStrength("B"),
         appLimitA: strengthMgr.getAppLimit("A"),
         appLimitB: strengthMgr.getAppLimit("B"),
+        effectiveLimitA: strengthMgr.getLimit("A"),
+        effectiveLimitB: strengthMgr.getLimit("B"),
       },
     })
   })
