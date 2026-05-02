@@ -24,6 +24,9 @@ if (invalidTarget) {
 
 const builds: Array<Target | null> = targets.length > 0 ? targets as Target[] : [null]
 
+const check = Bun.spawnSync(["bun", "run", "tsc", "--noEmit"], { stdio: ["inherit", "inherit", "inherit"] })
+if (check.exitCode !== 0) process.exit(check.exitCode ?? 1)
+
 rmSync(DIST_DIR, { recursive: true, force: true })
 mkdirSync(DIST_DIR, { recursive: true })
 

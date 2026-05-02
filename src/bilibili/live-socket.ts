@@ -255,7 +255,6 @@ function parseJsonMessages(body: Uint8Array): any[] {
 }
 
 function toUint8Array(data: unknown): Uint8Array | null {
-  if (typeof data === "string") return new TextEncoder().encode(data)
   if (data instanceof ArrayBuffer) return new Uint8Array(data)
   if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
   return null

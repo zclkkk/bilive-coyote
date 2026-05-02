@@ -130,11 +130,7 @@ export class CoyoteServer {
 
   private sendHeartbeat(): void {
     if (!this.appWs || !this.appClientId) return
-    try {
-      this.appWs.send(buildMessage("heartbeat", this.appClientId, this.bridgeId, ErrCode.SUCCESS))
-    } catch (e) {
-      console.error("[Coyote] Heartbeat send failed:", e)
-    }
+    this.appWs.send(buildMessage("heartbeat", this.appClientId, this.bridgeId, ErrCode.SUCCESS))
   }
 
   sendStrength(channel: "A" | "B", mode: number, value: number): void {
