@@ -258,7 +258,11 @@ export class CoyoteServer {
     this.clients.delete(id)
     this.lastHeartbeatAt.delete(id)
 
-    if (id === this.appClientId) this.appClientId = null
+    const appDisconnected = id === this.appClientId
+    if (appDisconnected) {
+      this.appClientId = null
+      this.currentStrength = { a: 0, b: 0, limitA: 200, limitB: 200 }
+    }
     if (id === this.frontClientId && id !== this.virtualClientId) this.frontClientId = this.virtualClientId
 
     if (partnerId && partnerId !== this.virtualClientId) {
@@ -276,8 +280,8 @@ export class CoyoteServer {
     console.log(`[Coyote] Client disconnected: ${id}`)
     this.eventBus.emit("coyote:status", {
       paired: !!this.appClientId,
-      strengthA: 0,
-      strengthB: 0,
+      strengthA: this.currentStrength.a,
+      strengthB: this.currentStrength.b,
       limitA: this.currentStrength.limitA,
       limitB: this.currentStrength.limitB,
       clientCount: this.clients.size - 1,

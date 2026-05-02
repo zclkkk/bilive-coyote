@@ -28,6 +28,8 @@ async function main() {
     if (status.paired) {
       strengthMgr.updateAppLimits(status.limitA, status.limitB)
       strengthMgr.syncFromApp(status.strengthA, status.strengthB)
+    } else {
+      strengthMgr.resetLocal()
     }
   })
 

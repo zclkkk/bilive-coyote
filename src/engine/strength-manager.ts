@@ -55,6 +55,13 @@ export class StrengthManager {
     }
   }
 
+  resetLocal(): void {
+    this.channels.A = { value: 0, baseline: 0, expiries: [] }
+    this.channels.B = { value: 0, baseline: 0, expiries: [] }
+    this.appLimits = { a: 200, b: 200 }
+    this.lastInternalChangeAt = 0
+  }
+
   private getLimit(ch: "A" | "B"): number {
     const safety = this.config.safety
     const configLimit = ch === "A" ? safety.limitA : safety.limitB
