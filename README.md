@@ -80,7 +80,6 @@ public/
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | /api/bilibili/auth | 验证 AppKey/AppSecret |
 | POST | /api/bilibili/start | 开始监听直播间 |
 | POST | /api/bilibili/stop | 停止监听 |
 | GET | /api/bilibili/status | B站连接状态 |
