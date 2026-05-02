@@ -1,9 +1,9 @@
-import { BilibiliLiveSocket } from "../live-socket"
+import { BilibiliLiveSocket, type LiveSocketStatus } from "../live-socket"
 import { parseOpenPlatformGift } from "./parser"
 import { signOpenPlatformRequest } from "./signer"
-import type { BilibiliSource, BilibiliStartInput, BilibiliStatus } from "../types"
+import type { BilibiliSource, BilibiliStatus, OpenPlatformStartInput } from "../types"
 import type { ConfigStore } from "../../config/store"
-import type { BilibiliStatusEvent, EventBus } from "../../engine/event-bus"
+import type { EventBus } from "../../engine/event-bus"
 
 const BASE_URL = "https://live-open.biliapi.com"
 
@@ -12,7 +12,7 @@ interface OpenPlatformCredentials {
   appSecret: string
 }
 
-export class OpenPlatformSource implements BilibiliSource {
+export class OpenPlatformSource implements BilibiliSource<"open-platform"> {
   readonly type = "open-platform" as const
 
   private config: ConfigStore
@@ -23,7 +23,7 @@ export class OpenPlatformSource implements BilibiliSource {
   private gameId: string | null = null
   private httpHeartbeatTimer: ReturnType<typeof setInterval> | null = null
   private roomId: number | null = null
-  private socketStatus: BilibiliStatusEvent = { connected: false }
+  private socketStatus: LiveSocketStatus = { connected: false }
 
   constructor(config: ConfigStore, eventBus: EventBus) {
     this.config = config
@@ -31,7 +31,7 @@ export class OpenPlatformSource implements BilibiliSource {
     this.socket = new BilibiliLiveSocket()
   }
 
-  async start(input: BilibiliStartInput): Promise<void> {
+  async start(input: OpenPlatformStartInput): Promise<void> {
     if (this.gameId) await this.stop()
 
     const defaults = this.config.bilibili.openPlatform
@@ -164,7 +164,7 @@ export class OpenPlatformSource implements BilibiliSource {
     if (gift) this.eventBus.emit("gift", gift)
   }
 
-  private handleSocketStatus(status: BilibiliStatusEvent): void {
+  private handleSocketStatus(status: LiveSocketStatus): void {
     this.socketStatus = status
     this.eventBus.emit("bilibili:status", this.getStatus())
   }

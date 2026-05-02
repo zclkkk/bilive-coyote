@@ -1,5 +1,5 @@
 import { EventEmitter } from "events"
-import type { BilibiliSourceType } from "../config/types"
+import type { BilibiliStatus } from "../bilibili/types"
 
 export interface GiftEvent {
   giftId: number
@@ -22,14 +22,6 @@ export interface StrengthChangeEvent {
   duration?: number
 }
 
-export interface BilibiliStatusEvent {
-  connected: boolean
-  source?: BilibiliSourceType
-  roomId?: number
-  gameId?: string | null
-  error?: string
-}
-
 export interface CoyoteStatusEvent {
   paired: boolean
   strengthA: number
@@ -41,7 +33,7 @@ export interface CoyoteStatusEvent {
 export type AppEvents = {
   gift: [GiftEvent]
   "strength:change": [StrengthChangeEvent]
-  "bilibili:status": [BilibiliStatusEvent]
+  "bilibili:status": [BilibiliStatus]
   "coyote:status": [CoyoteStatusEvent]
   "gift:log": [GiftEvent & { strengthDelta: string }]
 }

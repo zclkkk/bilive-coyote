@@ -39,7 +39,7 @@ async function resolveRoomId(roomId: number): Promise<number> {
   return res.data.room_id
 }
 
-export async function fetchDanmuInfo(roomId: number): Promise<{ key: string; address: string; roomId: number }> {
+export async function fetchDanmuInfo(roomId: number): Promise<{ key: string; urls: string[]; roomId: number }> {
   const buvid3 = await getBuvid3()
   const longRoomId = await resolveRoomId(roomId)
 
@@ -60,5 +60,9 @@ export async function fetchDanmuInfo(roomId: number): Promise<{ key: string; add
   if (danmu.code !== 0) throw new Error(`getDanmuInfo failed: code=${danmu.code}`)
 
   const { token: key, host_list } = danmu.data
-  return { key, address: `wss://${host_list[0].host}/sub`, roomId: longRoomId }
+  return {
+    key,
+    urls: host_list.map((host: { host: string }) => `wss://${host.host}/sub`),
+    roomId: longRoomId,
+  }
 }

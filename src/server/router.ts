@@ -2,6 +2,7 @@ import { ConfigStore } from "../config/store"
 import type { CoyoteServer } from "../coyote/server"
 import type { StrengthManager } from "../engine/strength-manager"
 import type { BilibiliService } from "../bilibili/service"
+import type { BilibiliStartInput } from "../bilibili/types"
 import { validateBilibiliStart, validateManualStrength } from "../config/schema"
 
 export function createRouter(
@@ -26,9 +27,10 @@ export function createRouter(
   })
 
   routes.set("POST /api/bilibili/start", async (req) => {
-    const body = validateBilibiliStart(await req.json())
-    const source = body.source ?? config.bilibili.source
-    if (source === "open-platform") {
+    const body = validateBilibiliStart(await req.json(), config.bilibili.source)
+    let input: BilibiliStartInput
+
+    if (body.source === "open-platform") {
       const openPlatform = config.bilibili.openPlatform
       const code = body.code ?? openPlatform.code
       const appId = body.appId ?? openPlatform.appId
@@ -37,13 +39,15 @@ export function createRouter(
       if (!code || !appId || !appKey || !appSecret) {
         return Response.json({ error: "code, appId, appKey and appSecret required" }, { status: 400 })
       }
-    }
-    if (source === "broadcast") {
+      input = { source: body.source, code, appId, appKey, appSecret }
+    } else {
       const roomId = body.roomId ?? config.bilibili.broadcast.roomId
       if (!roomId) return Response.json({ error: "roomId required" }, { status: 400 })
+      input = { source: body.source, roomId }
     }
+
     try {
-      await bilibili.start({ ...body, source })
+      await bilibili.start(input)
       return Response.json({ success: true })
     } catch (e: any) {
       return Response.json({ error: e.message }, { status: 500 })

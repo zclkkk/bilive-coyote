@@ -1,18 +1,18 @@
-import { BilibiliLiveSocket } from "../live-socket"
+import { BilibiliLiveSocket, type LiveSocketStatus } from "../live-socket"
 import { parseBroadcastGift } from "./parser"
 import { fetchDanmuInfo } from "./wbi"
-import type { BilibiliSource, BilibiliStartInput, BilibiliStatus } from "../types"
+import type { BilibiliSource, BilibiliStatus, BroadcastStartInput } from "../types"
 import type { ConfigStore } from "../../config/store"
-import type { BilibiliStatusEvent, EventBus } from "../../engine/event-bus"
+import type { EventBus } from "../../engine/event-bus"
 
-export class BroadcastSource implements BilibiliSource {
+export class BroadcastSource implements BilibiliSource<"broadcast"> {
   readonly type = "broadcast" as const
 
   private config: ConfigStore
   private eventBus: EventBus
   private socket: BilibiliLiveSocket
   private roomId: number | null = null
-  private socketStatus: BilibiliStatusEvent = { connected: false }
+  private socketStatus: LiveSocketStatus = { connected: false }
 
   constructor(config: ConfigStore, eventBus: EventBus) {
     this.config = config
@@ -20,18 +20,18 @@ export class BroadcastSource implements BilibiliSource {
     this.socket = new BilibiliLiveSocket()
   }
 
-  async start(input: BilibiliStartInput): Promise<void> {
+  async start(input: BroadcastStartInput): Promise<void> {
     if (this.socketStatus.connected) await this.stop()
 
     const requestedRoomId = input.roomId ?? this.config.bilibili.broadcast.roomId
     if (!requestedRoomId) throw new Error("roomId required")
 
-    const { key, address, roomId } = await fetchDanmuInfo(requestedRoomId)
+    const { key, urls, roomId } = await fetchDanmuInfo(requestedRoomId)
     this.roomId = roomId
 
     this.socket.connect({
       label: "Bilibili/Broadcast",
-      urls: [address],
+      urls,
       auth: {
         uid: 0,
         roomid: roomId,
@@ -68,7 +68,7 @@ export class BroadcastSource implements BilibiliSource {
     }
   }
 
-  private handleSocketStatus(status: BilibiliStatusEvent): void {
+  private handleSocketStatus(status: LiveSocketStatus): void {
     this.socketStatus = status
     this.eventBus.emit("bilibili:status", this.getStatus())
   }
