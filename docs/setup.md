@@ -32,6 +32,12 @@ bun run start
 CONFIG_PATH=/path/to/config.json bun run start
 ```
 
+运行时状态（如开放平台残留 `gameId`）写在 `state.json`，可以用 `STATE_PATH` 覆盖：
+
+```bash
+STATE_PATH=/path/to/state.json bun run start
+```
+
 单文件可执行程序也使用同样规则：
 
 ```bash

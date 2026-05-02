@@ -38,9 +38,11 @@ export class CoyoteServer {
 
   async start(): Promise<void> {
     const port = this.config.coyote.wsPort
+    const hostname = this.config.server.host
 
     this.server = Bun.serve<{ id: string }>({
       port,
+      hostname,
       fetch: (req, server) => {
         const url = new URL(req.url)
         const bridgeId = url.pathname.slice(1)

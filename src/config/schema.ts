@@ -30,7 +30,6 @@ export function validateConfig(value: unknown): AppConfig {
         appSecret: string(openPlatform.appSecret, "bilibili.openPlatform.appSecret"),
         code: string(openPlatform.code, "bilibili.openPlatform.code"),
         appId: integer(openPlatform.appId, "bilibili.openPlatform.appId", 0),
-        gameId: string(openPlatform.gameId ?? "", "bilibili.openPlatform.gameId"),
       },
       broadcast: {
         roomId: integer(broadcastCfg.roomId, "bilibili.broadcast.roomId", 0),

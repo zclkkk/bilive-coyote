@@ -32,7 +32,7 @@
 - 主播身份码
 - `App ID`
 
-开放平台会把启动成功后的 `gameId` 保存到配置文件。进程异常退出后，下次启动会先尝试结束残留会话。
+开放平台会把启动成功后的 `gameId` 写入运行时状态文件 `state.json`（和用户配置 `config.json` 分离）。进程异常退出后，下次启动会读取该值并先调用 `/v2/app/end` 清理残留会话。
 
 当前只接收开放平台礼物事件 `LIVE_OPEN_PLATFORM_SEND_GIFT`。
 
@@ -52,8 +52,7 @@
       "appKey": "",
       "appSecret": "",
       "code": "",
-      "appId": 0,
-      "gameId": ""
+      "appId": 0
     },
     "broadcast": {
       "roomId": 6154037

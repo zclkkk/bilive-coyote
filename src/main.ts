@@ -1,4 +1,5 @@
 import { ConfigStore } from "./config/store"
+import { RuntimeStateStore } from "./config/runtime-state"
 import { BilibiliService } from "./bilibili/service"
 import { CoyoteServer } from "./coyote/server"
 import { EventBus } from "./engine/event-bus"
@@ -10,10 +11,11 @@ async function main() {
   console.log("[Bilive-Coyote] Starting...")
 
   const config = new ConfigStore()
+  const state = new RuntimeStateStore()
   const eventBus = new EventBus()
-  const bilibili = new BilibiliService(config, eventBus)
+  const bilibili = new BilibiliService(config, state, eventBus)
   const coyote = new CoyoteServer(config, eventBus)
-  const giftMapper = new GiftMapper(config, eventBus)
+  new GiftMapper(config, eventBus)
   const strengthMgr = new StrengthManager(config, eventBus, coyote)
   const mainServer = new MainServer(config, eventBus, coyote, strengthMgr, bilibili)
 
