@@ -11,16 +11,14 @@ let currentConfig = {}
 let currentRules = []
 let appLimits = { a: 200, b: 200 }
 let lastStrengthA = 0, lastStrengthB = 0
+let qrLoaded = false
 
 async function init() {
   await loadConfig()
   await loadStatus()
   setupEventListeners()
   setupWSEvents()
-  if (!lastCoyotePaired) loadQRCode()
 }
-
-let lastCoyotePaired = false
 
 async function loadConfig() {
   try {
@@ -57,10 +55,10 @@ function renderConfig() {
   $("#appId").value = b.appId || ""
 
   const s = currentConfig.safety || {}
-  $("#limitA").value = Math.min(s.limitA || 80, appLimits.a)
-  $("#limitB").value = Math.min(s.limitB || 80, appLimits.b)
+  $("#limitA").value = s.limitA ?? 80
+  $("#limitB").value = s.limitB ?? 80
   $("#decayEnabled").checked = s.decayEnabled !== false
-  $("#decayRate").value = s.decayRate || 2
+  $("#decayRate").value = s.decayRate ?? 2
   updateLimitHints()
 }
 
@@ -73,12 +71,13 @@ function updateLimitHints() {
   setHint("#hint-limitB", appLimits.b)
 }
 
-function refreshSafetyInputs() {
+function safetyLimit(channel) {
   const safety = currentConfig.safety || {}
-  const elLimitA = $("#limitA")
-  const elLimitB = $("#limitB")
-  if (elLimitA) elLimitA.value = Math.min(safety.limitA || 80, appLimits.a)
-  if (elLimitB) elLimitB.value = Math.min(safety.limitB || 80, appLimits.b)
+  return channel === "A" ? (safety.limitA ?? 80) : (safety.limitB ?? 80)
+}
+
+function effectiveLimit(channel) {
+  return Math.min(safetyLimit(channel), appLimits[channel.toLowerCase()])
 }
 
 function renderRules() {
@@ -97,10 +96,10 @@ function renderRules() {
   }
 
   container.querySelectorAll("[data-idx]").forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = async () => {
       const idx = parseInt(btn.dataset.idx)
-      currentRules.splice(idx, 1)
-      api.config.rules.set(currentRules)
+      currentRules = currentRules.filter((_, i) => i !== idx)
+      await api.config.rules.set(currentRules)
       renderRules()
     }
   })
@@ -128,7 +127,7 @@ function setupEventListeners() {
         case "dec5": delta = -5; break
       }
       const current = ch === "A" ? lastStrengthA : lastStrengthB
-      const newVal = Math.max(0, Math.min(current + delta, appLimits[ch.toLowerCase()]))
+      const newVal = Math.max(0, Math.min(current + delta, effectiveLimit(ch)))
       api.coyote.strength(ch, newVal)
     }
   })
@@ -171,15 +170,9 @@ function setupEventListeners() {
   }
 
   $("#save-safety").onclick = async () => {
-    const limitA = Math.min(parseInt($("#limitA").value), appLimits.a)
-    const limitB = Math.min(parseInt($("#limitB").value), appLimits.b)
-
-    $("#limitA").value = limitA
-    $("#limitB").value = limitB
-
     const safety = {
-      limitA,
-      limitB,
+      limitA: parseInt($("#limitA").value),
+      limitB: parseInt($("#limitB").value),
       decayEnabled: $("#decayEnabled").checked,
       decayRate: parseInt($("#decayRate").value),
     }
@@ -228,6 +221,7 @@ function setupWSEvents() {
   // 断线重连后重新同步状态，避免错过断开期间的状态变化
   ws.on("reconnect", async () => {
     console.log("[Panel] Reconnected, refreshing state")
+    qrLoaded = false
     await loadConfig()
     await loadStatus()
   })
@@ -250,16 +244,11 @@ function updateCoyoteStatus(data) {
   const text = $("#coyote-text")
   const qrView = $("#qr-view")
   const pairDetail = $("#pair-detail")
-  lastCoyotePaired = !!data.paired
   if (data.paired) {
     dot.className = "status-dot online"
     text.textContent = "已配对"
     qrView.style.display = "none"
     pairDetail.style.display = "block"
-    if (qrPollingTimer) {
-      clearTimeout(qrPollingTimer)
-      qrPollingTimer = null
-    }
   } else {
     dot.className = "status-dot offline"
     text.textContent = "等待配对"
@@ -271,13 +260,9 @@ function updateCoyoteStatus(data) {
     if (elA) elA.textContent = "--"
     if (elB) elB.textContent = "--"
     updateLimitHints()
-    refreshSafetyInputs()
     updateStrengthBars(0, 0)
-    loadQRCode()
+    if (!qrLoaded) loadQRCode()
     return
-  }
-  if (data.strengthA !== undefined) {
-    updateStrengthBars(data.strengthA, data.strengthB)
   }
   if (data.limitA !== undefined) {
     appLimits.a = data.limitA
@@ -287,28 +272,23 @@ function updateCoyoteStatus(data) {
     if (elA) elA.textContent = data.limitA
     if (elB) elB.textContent = data.limitB
     updateLimitHints()
-    refreshSafetyInputs()
-    updateStrengthBars()
   }
-  updatePairDetail(data)
+  if (data.strengthA !== undefined) {
+    updateStrengthBars(data.strengthA, data.strengthB)
+  }
+  updatePairDetail()
 }
 
-function updatePairDetail(data) {
-  const elA = $("#pair-a")
-  const elB = $("#pair-b")
+function updatePairDetail() {
   const elPort = $("#pair-ws-port")
-  if (elA) elA.textContent = `${data.strengthA ?? 0} / ${data.limitA ?? 200}`
-  if (elB) elB.textContent = `${data.strengthB ?? 0} / ${data.limitB ?? 200}`
   if (elPort) elPort.textContent = currentConfig.coyote?.wsPort ?? 9999
 }
 
 function updateStrengthBars(a, b) {
-  if (a !== undefined) lastStrengthA = a
-  if (b !== undefined) lastStrengthB = b
-
-  const safety = currentConfig.safety || {}
-  const limitA = Math.min(safety.limitA || 80, appLimits.a)
-  const limitB = Math.min(safety.limitB || 80, appLimits.b)
+  const limitA = effectiveLimit("A")
+  const limitB = effectiveLimit("B")
+  if (a !== undefined) lastStrengthA = Math.min(a, limitA)
+  if (b !== undefined) lastStrengthB = Math.min(b, limitB)
 
   const fillA = $("#bar-a-fill")
   const fillB = $("#bar-b-fill")
@@ -316,11 +296,11 @@ function updateStrengthBars(a, b) {
   const valB = $("#bar-b-val")
 
   if (fillA) {
-    fillA.style.width = `${(lastStrengthA / limitA) * 100}%`
+    fillA.style.width = limitA > 0 ? `${(lastStrengthA / limitA) * 100}%` : "0%"
     valA.textContent = `${lastStrengthA}/${limitA}`
   }
   if (fillB) {
-    fillB.style.width = `${(lastStrengthB / limitB) * 100}%`
+    fillB.style.width = limitB > 0 ? `${(lastStrengthB / limitB) * 100}%` : "0%"
     valB.textContent = `${lastStrengthB}/${limitB}`
   }
 
@@ -345,13 +325,7 @@ function addGiftLog(data) {
   while (log.children.length > 50) log.removeChild(log.lastChild)
 }
 
-let qrPollingTimer = null
-
 async function loadQRCode() {
-  if (qrPollingTimer) {
-    clearTimeout(qrPollingTimer)
-    qrPollingTimer = null
-  }
   try {
     const data = await api.coyote.qrcode()
     if (data.qrcode) {
@@ -359,12 +333,12 @@ async function loadQRCode() {
       img.src = data.qrcode
       img.style.display = "block"
       $("#qr-status").textContent = "用 DG-LAB APP 扫描二维码配对"
+      qrLoaded = true
     } else {
-      $("#qr-status").textContent = "等待连接..."
-      qrPollingTimer = setTimeout(loadQRCode, 3000)
+      $("#qr-status").textContent = data.error || "二维码生成失败"
     }
   } catch {
-    qrPollingTimer = setTimeout(loadQRCode, 3000)
+    $("#qr-status").textContent = "二维码生成失败"
   }
 }
 

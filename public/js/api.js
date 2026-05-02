@@ -23,11 +23,9 @@ export const api = {
   bilibili: {
     start: (code, appId, appKey, appSecret) => api.post("/api/bilibili/start", { code, appId, appKey, appSecret }),
     stop: () => api.post("/api/bilibili/stop"),
-    status: () => api.get("/api/bilibili/status"),
   },
 
   coyote: {
-    status: () => api.get("/api/coyote/status"),
     qrcode: () => api.get("/api/coyote/qrcode"),
     strength: (channel, value) => api.post("/api/coyote/strength", { channel, value }),
     emergency: () => api.post("/api/coyote/emergency"),

@@ -61,7 +61,7 @@ export function createRouter(
   routes.set("GET /api/coyote/qrcode", async () => {
     const qr = await coyote.getQRCodeBase64()
     if (!qr) {
-      return Response.json({ error: "No client connected" }, { status: 404 })
+      return Response.json({ error: "QR code unavailable" }, { status: 404 })
     }
     return Response.json({ qrcode: qr })
   })

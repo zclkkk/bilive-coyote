@@ -111,8 +111,6 @@
           <span class="status-dot online"></span>
           <span>已配对</span>
         </div>
-        <div class="pair-detail-row"><span class="pair-detail-label">A通道</span><span id="pair-a">0 / 200</span></div>
-        <div class="pair-detail-row"><span class="pair-detail-label">B通道</span><span id="pair-b">0 / 200</span></div>
         <div class="pair-detail-row"><span class="pair-detail-label">WS端口</span><span id="pair-ws-port">9999</span></div>
       </div>
     </div>
@@ -151,18 +149,18 @@
       <p class="hint-text">强度上限 = min(本端设置, APP端上限)。APP端上限只能在手机APP中修改。</p>
       <div class="form-group">
         <label>A通道强度上限 <span class="limit-hint" id="hint-limitA"></span></label>
-        <input id="limitA" type="number" value="80" min="1" max="200">
+        <input id="limitA" type="number" value="80" min="0" max="200">
       </div>
       <div class="form-group">
         <label>B通道强度上限 <span class="limit-hint" id="hint-limitB"></span></label>
-        <input id="limitB" type="number" value="80" min="1" max="200">
+        <input id="limitB" type="number" value="80" min="0" max="200">
       </div>
       <div class="form-group">
         <label><input id="decayEnabled" type="checkbox" checked> 启用衰减</label>
       </div>
       <div class="form-group">
         <label>衰减速率 (每秒)</label>
-        <input id="decayRate" type="number" value="2" min="1" max="50">
+        <input id="decayRate" type="number" value="2" min="1" max="200">
       </div>
       <div class="btn-row">
         <button id="save-safety" class="btn btn-primary">保存</button>
