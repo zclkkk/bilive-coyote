@@ -85,10 +85,6 @@ function validateRule(value: unknown, name: string): GiftRule {
   if (data.giftId !== undefined) {
     rule.giftId = integer(data.giftId, `${name}.giftId`, 1)
   }
-  if (data.pulsePattern !== undefined) {
-    if (!Array.isArray(data.pulsePattern)) throw new ValidationError(`${name}.pulsePattern must be an array`)
-    rule.pulsePattern = data.pulsePattern.map((item, index) => string(item, `${name}.pulsePattern[${index}]`))
-  }
 
   return rule
 }

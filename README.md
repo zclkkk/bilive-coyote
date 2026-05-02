@@ -56,8 +56,7 @@ src/
     danmaku-ws.ts        # 弹幕 WebSocket 客户端
   coyote/
     server.ts            # DG-LAB WS 服务端 (端口 9999)
-    message.ts           # 消息解析与转换
-    pulse-timer.ts       # 波形定时发送
+    message.ts           # 消息解析与构造
     error-codes.ts       # 协议错误码
   engine/
     event-bus.ts         # 类型安全事件总线

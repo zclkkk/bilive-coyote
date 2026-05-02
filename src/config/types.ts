@@ -5,7 +5,6 @@ export interface GiftRule {
   channel: "A" | "B" | "both"
   strengthAdd: number
   duration: number
-  pulsePattern?: string[]
 }
 
 export interface AppConfig {
