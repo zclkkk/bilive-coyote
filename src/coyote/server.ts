@@ -1,5 +1,15 @@
 import { PairingManager } from "./pairing"
-import { parseMessage, buildMessage, convertFrontendType, parseStrengthFeedback, isValidChannel } from "./message"
+import {
+  parseMessage,
+  buildMessage,
+  convertFrontendType,
+  parseStrengthFeedback,
+  isValidChannel,
+  isValidDuration,
+  isValidFrontendChannel,
+  isValidStrength,
+  parsePulseHexArray,
+} from "./message"
 import { PulseTimerManager } from "./pulse-timer"
 import { ErrCode } from "./error-codes"
 import type { EventBus } from "../engine/event-bus"
@@ -95,13 +105,14 @@ export class CoyoteServer {
   private onMessage(ws: any, rawData: any): void {
     const data = typeof rawData === "string" ? rawData : new TextDecoder().decode(rawData)
 
-    const msg = parseMessage(data)
-    if (!msg) {
-      ws.send(buildMessage("msg", "", "", ErrCode.INVALID_JSON))
+    const parsed = parseMessage(data)
+    if (!parsed.ok) {
+      ws.send(buildMessage("msg", "", "", parsed.code))
       return
     }
+    const msg = parsed.message
 
-    if (msg.type === "bind" && msg.targetId) {
+    if (msg.type === "bind") {
       const senderInfo = this.clients.get(msg.targetId)
       if (!senderInfo || senderInfo.ws !== ws) {
         ws.send(buildMessage("bind", msg.clientId, msg.targetId, ErrCode.PEER_OFFLINE))
@@ -140,8 +151,16 @@ export class CoyoteServer {
     }
 
     if (typeof msg.type === "number" && msg.type >= 1 && msg.type <= 3) {
-      const channel = (msg as any).channel || 1
-      const strength = (msg as any).strength || 0
+      if (!isValidFrontendChannel(msg.channel)) {
+        ws.send(buildMessage("error", msg.clientId, msg.targetId, ErrCode.CHANNEL_REQUIRED))
+        return
+      }
+      const channel = msg.channel
+      const strength = msg.type === 3 ? msg.strength : 1
+      if (!isValidStrength(strength)) {
+        ws.send(buildMessage("error", msg.clientId, msg.targetId, ErrCode.INVALID_JSON))
+        return
+      }
       const result = convertFrontendType(msg.type, channel, strength)
       if (result) {
         this.sendTo(msg.clientId, partnerId, result.message)
@@ -232,17 +251,19 @@ export class CoyoteServer {
       return
     }
 
-    const time = msg.time || 5
+    const time = msg.time ?? 5
+    if (!isValidDuration(time)) {
+      const clientInfo = this.clients.get(msg.clientId)
+      if (clientInfo) clientInfo.ws.send(buildMessage("error", msg.clientId, msg.targetId, ErrCode.INVALID_JSON))
+      return
+    }
     const key = `${msg.clientId}-${channel}`
 
-    let hexArray: string[] = []
-    try {
-      const msgContent = msg.message as string
-      const colonIdx = msgContent.indexOf(":")
-      const jsonStr = colonIdx >= 0 ? msgContent.substring(colonIdx + 1) : msgContent
-      hexArray = JSON.parse(jsonStr)
-    } catch {
-      hexArray = [msg.message]
+    const hexArray = parsePulseHexArray(msg.message)
+    if (!hexArray) {
+      const clientInfo = this.clients.get(msg.clientId)
+      if (clientInfo) clientInfo.ws.send(buildMessage("error", msg.clientId, msg.targetId, ErrCode.INVALID_JSON))
+      return
     }
 
     this.pulseTimers.startPulse(key, msg.clientId, partnerId, channel, hexArray, time)
