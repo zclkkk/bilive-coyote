@@ -297,11 +297,9 @@ function updatePairDetail(data) {
   const elA = $("#pair-a")
   const elB = $("#pair-b")
   const elPort = $("#pair-ws-port")
-  const elClients = $("#pair-clients")
   if (elA) elA.textContent = `${data.strengthA ?? 0} / ${data.limitA ?? 200}`
   if (elB) elB.textContent = `${data.strengthB ?? 0} / ${data.limitB ?? 200}`
   if (elPort) elPort.textContent = currentConfig.coyote?.wsPort ?? 9999
-  if (elClients) elClients.textContent = data.clientCount ?? "--"
 }
 
 function updateStrengthBars(a, b) {

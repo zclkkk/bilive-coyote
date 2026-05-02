@@ -161,7 +161,6 @@ export class CoyoteServer {
   getStatus() {
     return {
       paired: !!this.appWs,
-      clientCount: this.appWs ? 1 : 0,
       strengthA: this.currentStrength.a,
       strengthB: this.currentStrength.b,
       limitA: this.currentStrength.limitA,
@@ -187,7 +186,6 @@ export class CoyoteServer {
       strengthB: this.currentStrength.b,
       limitA: this.currentStrength.limitA,
       limitB: this.currentStrength.limitB,
-      clientCount: this.appWs ? 1 : 0,
     })
   }
 }

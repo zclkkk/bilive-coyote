@@ -33,7 +33,6 @@ export interface CoyoteStatusEvent {
   strengthB: number
   limitA: number
   limitB: number
-  clientCount?: number
 }
 
 export type AppEvents = {
