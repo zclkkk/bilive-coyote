@@ -1,8 +1,12 @@
-import { createHash, createHmac } from "crypto"
+import { createHash, createHmac } from "crypto";
 
-export function signOpenPlatformRequest(params: Record<string, unknown>, appKey: string, appSecret: string): Record<string, string> {
-  const timestamp = Math.floor(Date.now() / 1000)
-  const nonce = Math.floor(Math.random() * 100000) + timestamp
+export function signOpenPlatformRequest(
+  params: Record<string, unknown>,
+  appKey: string,
+  appSecret: string,
+): Record<string, string> {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const nonce = Math.floor(Math.random() * 100000) + timestamp;
 
   const headers: Record<string, string> = {
     "x-bili-accesskeyid": appKey,
@@ -11,15 +15,17 @@ export function signOpenPlatformRequest(params: Record<string, unknown>, appKey:
     "x-bili-signature-nonce": String(nonce),
     "x-bili-signature-version": "1.0",
     "x-bili-timestamp": String(timestamp),
-  }
+  };
 
-  const data = Object.entries(headers).map(([key, value]) => `${key}:${value}`).join("\n")
-  const signature = createHmac("sha256", appSecret).update(data).digest("hex")
+  const data = Object.entries(headers)
+    .map(([key, value]) => `${key}:${value}`)
+    .join("\n");
+  const signature = createHmac("sha256", appSecret).update(data).digest("hex");
 
   return {
     "Content-Type": "application/json",
     Accept: "application/json",
     ...headers,
     Authorization: signature,
-  }
+  };
 }

@@ -1,1 +1,1 @@
-export { OpenPlatformSource } from "./source"
+export { OpenPlatformSource } from "./source";

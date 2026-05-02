@@ -14,7 +14,11 @@
   --radius: 8px;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -60,7 +64,9 @@ header h1 span {
   transition: opacity 0.2s;
 }
 
-.emergency-btn:hover { opacity: 0.85; }
+.emergency-btn:hover {
+  opacity: 0.85;
+}
 
 .card {
   background: var(--surface);
@@ -95,8 +101,12 @@ header h1 span {
   flex-shrink: 0;
 }
 
-.status-dot.online { background: var(--accent); }
-.status-dot.offline { background: var(--danger); }
+.status-dot.online {
+  background: var(--accent);
+}
+.status-dot.offline {
+  background: var(--danger);
+}
 
 .strength-bars {
   display: flex;
@@ -131,8 +141,12 @@ header h1 span {
   min-width: 0;
 }
 
-.strength-bar-fill.a { background: linear-gradient(90deg, var(--accent2), var(--accent)); }
-.strength-bar-fill.b { background: linear-gradient(90deg, #4488ff, #66aaff); }
+.strength-bar-fill.a {
+  background: linear-gradient(90deg, var(--accent2), var(--accent));
+}
+.strength-bar-fill.b {
+  background: linear-gradient(90deg, #4488ff, #66aaff);
+}
 
 .strength-bar-sub {
   font-size: 0.7rem;
@@ -208,7 +222,8 @@ header h1 span {
   margin-bottom: 4px;
 }
 
-.form-group input, .form-group select {
+.form-group input,
+.form-group select {
   width: 100%;
   padding: 8px 12px;
   background: var(--surface2);
@@ -236,7 +251,8 @@ header h1 span {
   margin-right: 6px;
 }
 
-.form-group input:focus, .form-group select:focus {
+.form-group input:focus,
+.form-group select:focus {
   border-color: var(--accent);
 }
 
@@ -256,11 +272,26 @@ header h1 span {
   transition: opacity 0.2s;
 }
 
-.btn:hover { opacity: 0.85; }
-.btn-primary { background: var(--accent); color: #000; }
-.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-.btn-danger { background: var(--danger); color: #fff; }
-.btn-small { padding: 4px 12px; font-size: 0.8rem; }
+.btn:hover {
+  opacity: 0.85;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+}
+.btn-secondary {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-small {
+  padding: 4px 12px;
+  font-size: 0.8rem;
+}
 
 .qr-container {
   text-align: center;
@@ -280,7 +311,9 @@ header h1 span {
   font-size: 0.85rem;
 }
 
-.pair-detail-row:last-child { border-bottom: none; }
+.pair-detail-row:last-child {
+  border-bottom: none;
+}
 
 .pair-detail-label {
   color: var(--text2);
@@ -301,10 +334,18 @@ header h1 span {
   font-size: 0.85rem;
 }
 
-.rule-item:last-child { border-bottom: none; }
+.rule-item:last-child {
+  border-bottom: none;
+}
 
-.rule-item .rule-name { font-weight: 600; min-width: 60px; }
-.rule-item .rule-effect { color: var(--text2); flex: 1; }
+.rule-item .rule-name {
+  font-weight: 600;
+  min-width: 60px;
+}
+.rule-item .rule-effect {
+  color: var(--text2);
+  flex: 1;
+}
 
 .gift-log {
   max-height: 200px;
@@ -320,10 +361,21 @@ header h1 span {
   gap: 8px;
 }
 
-.gift-log-item .time { color: var(--text2); min-width: 50px; }
-.gift-log-item .user { color: var(--accent); min-width: 60px; }
-.gift-log-item .gift { color: var(--gold); }
-.gift-log-item .effect { color: var(--text2); margin-left: auto; }
+.gift-log-item .time {
+  color: var(--text2);
+  min-width: 50px;
+}
+.gift-log-item .user {
+  color: var(--accent);
+  min-width: 60px;
+}
+.gift-log-item .gift {
+  color: var(--gold);
+}
+.gift-log-item .effect {
+  color: var(--text2);
+  margin-left: auto;
+}
 
 .add-rule-form {
   display: grid;
@@ -335,9 +387,20 @@ header h1 span {
 }
 
 @media (max-width: 600px) {
-  .container { padding: 8px; }
-  .strength-bars { flex-direction: column; }
-  .add-rule-form { grid-template-columns: 1fr; }
-  header { flex-direction: column; gap: 8px; }
-  .emergency-btn { width: 100%; }
+  .container {
+    padding: 8px;
+  }
+  .strength-bars {
+    flex-direction: column;
+  }
+  .add-rule-form {
+    grid-template-columns: 1fr;
+  }
+  header {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .emergency-btn {
+    width: 100%;
+  }
 }

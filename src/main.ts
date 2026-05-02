@@ -1,50 +1,50 @@
-import { ConfigStore } from "./config/store"
-import { RuntimeStateStore } from "./config/runtime-state"
-import { BilibiliService } from "./bilibili/service"
-import { CoyoteServer } from "./coyote/server"
-import { EventBus } from "./engine/event-bus"
-import { GiftMapper } from "./engine/gift-mapper"
-import { StrengthManager } from "./engine/strength-manager"
-import { MainServer } from "./server/main-server"
+import { BilibiliService } from "./bilibili/service";
+import { RuntimeStateStore } from "./config/runtime-state";
+import { ConfigStore } from "./config/store";
+import { CoyoteServer } from "./coyote/server";
+import { EventBus } from "./engine/event-bus";
+import { GiftMapper } from "./engine/gift-mapper";
+import { StrengthManager } from "./engine/strength-manager";
+import { MainServer } from "./server/main-server";
 
 async function main() {
-  console.log("[Bilive-Coyote] Starting...")
+  console.log("[Bilive-Coyote] Starting...");
 
-  const config = new ConfigStore()
-  const state = new RuntimeStateStore()
-  const eventBus = new EventBus()
-  const bilibili = new BilibiliService(config, state, eventBus)
-  const coyote = new CoyoteServer(config, eventBus)
-  new GiftMapper(config, eventBus)
-  const strengthMgr = new StrengthManager(config, eventBus, coyote)
-  const mainServer = new MainServer(config, eventBus, coyote, strengthMgr, bilibili)
+  const config = new ConfigStore();
+  const state = new RuntimeStateStore();
+  const eventBus = new EventBus();
+  const bilibili = new BilibiliService(config, state, eventBus);
+  const coyote = new CoyoteServer(config, eventBus);
+  new GiftMapper(config, eventBus);
+  const strengthMgr = new StrengthManager(config, eventBus, coyote);
+  const mainServer = new MainServer(config, eventBus, coyote, strengthMgr, bilibili);
 
   eventBus.on("bilibili:status", (status) => {
-    console.log("[Bilibili] Status:", status)
-  })
+    console.log("[Bilibili] Status:", status);
+  });
 
   eventBus.on("gift:log", (log) => {
-    console.log(`[Gift] ${log.uname} sent ${log.giftName} x${log.num} (${log.strengthDelta})`)
-  })
+    console.log(`[Gift] ${log.uname} sent ${log.giftName} x${log.num} (${log.strengthDelta})`);
+  });
 
-  await coyote.start()
-  await mainServer.start()
+  await coyote.start();
+  await mainServer.start();
 
-  const { httpPort, host } = config.server
-  const displayHost = host === "0.0.0.0" ? "localhost" : host
-  console.log(`[Bilive-Coyote] Ready! Open http://${displayHost}:${httpPort}`)
+  const { httpPort, host } = config.server;
+  const displayHost = host === "0.0.0.0" ? "localhost" : host;
+  console.log(`[Bilive-Coyote] Ready! Open http://${displayHost}:${httpPort}`);
 
   const shutdown = async () => {
-    console.log("[Bilive-Coyote] Shutting down...")
-    strengthMgr.destroy()
-    coyote.stop()
-    mainServer.stop()
-    await bilibili.end()
-    process.exit(0)
-  }
+    console.log("[Bilive-Coyote] Shutting down...");
+    strengthMgr.destroy();
+    coyote.stop();
+    mainServer.stop();
+    await bilibili.end();
+    process.exit(0);
+  };
 
-  process.on("SIGINT", shutdown)
-  process.on("SIGTERM", shutdown)
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
-main().catch(console.error)
+main().catch(console.error);

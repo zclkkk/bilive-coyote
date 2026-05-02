@@ -1,88 +1,88 @@
-import { AppConfig, DEFAULT_CONFIG } from "./types"
-import { ValidationError, validateConfig, validateRules } from "./schema"
-import { existsSync, readFileSync } from "fs"
-import { resolve, isAbsolute } from "path"
+import { existsSync, readFileSync } from "fs";
+import { isAbsolute, resolve } from "path";
+import { ValidationError, validateConfig, validateRules } from "./schema";
+import { type AppConfig, DEFAULT_CONFIG } from "./types";
 
 export class ConfigStore {
-  private data: AppConfig
-  private filePath: string
+  private data: AppConfig;
+  private filePath: string;
 
   constructor() {
     // 优先使用环境变量 CONFIG_PATH，其次以 cwd 为基准 (兼容 bun build --compile 后的二进制)
-    const envPath = process.env.CONFIG_PATH
+    const envPath = process.env.CONFIG_PATH;
     if (envPath && envPath.length > 0) {
-      this.filePath = isAbsolute(envPath) ? envPath : resolve(process.cwd(), envPath)
+      this.filePath = isAbsolute(envPath) ? envPath : resolve(process.cwd(), envPath);
     } else {
-      this.filePath = resolve(process.cwd(), "config.json")
+      this.filePath = resolve(process.cwd(), "config.json");
     }
-    this.data = validateConfig(DEFAULT_CONFIG)
+    this.data = validateConfig(DEFAULT_CONFIG);
     if (existsSync(this.filePath)) {
       try {
-        const content = readFileSync(this.filePath, "utf-8")
-        const parsed = JSON.parse(content)
-        this.data = validateConfig(deepMerge(this.data, parsed))
+        const content = readFileSync(this.filePath, "utf-8");
+        const parsed = JSON.parse(content);
+        this.data = validateConfig(deepMerge(this.data, parsed));
       } catch (e) {
-        console.error(`[Config] Failed to parse ${this.filePath}:`, e)
+        console.error(`[Config] Failed to parse ${this.filePath}:`, e);
       }
     }
   }
 
   get(): AppConfig {
-    return this.data
+    return this.data;
   }
 
   get bilibili() {
-    return this.data.bilibili
+    return this.data.bilibili;
   }
 
   get coyote() {
-    return this.data.coyote
+    return this.data.coyote;
   }
 
   get server() {
-    return this.data.server
+    return this.data.server;
   }
 
   get rules() {
-    return this.data.rules
+    return this.data.rules;
   }
 
   get safety() {
-    return this.data.safety
+    return this.data.safety;
   }
 
   async set(partial: unknown): Promise<void> {
-    this.data = validateConfig(deepMerge(this.data, partialObject(partial)))
-    await this.save()
+    this.data = validateConfig(deepMerge(this.data, partialObject(partial)));
+    await this.save();
   }
 
   async setRules(rules: unknown): Promise<void> {
-    this.data.rules = validateRules(rules)
-    await this.save()
+    this.data.rules = validateRules(rules);
+    await this.save();
   }
 
   async save(): Promise<void> {
-    await Bun.write(this.filePath, JSON.stringify(this.data, null, 2))
+    await Bun.write(this.filePath, JSON.stringify(this.data, null, 2));
   }
 }
 
 function partialObject(value: unknown): Partial<AppConfig> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new ValidationError("config patch must be an object")
+    throw new ValidationError("config patch must be an object");
   }
-  return value as Partial<AppConfig>
+  return value as Partial<AppConfig>;
 }
 
 function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
-  const result = { ...target }
+  const result = { ...target };
   for (const key of Object.keys(source) as (keyof T)[]) {
-    const sv = source[key]
-    const tv = target[key]
+    const sv = source[key];
+    const tv = target[key];
     if (sv && typeof sv === "object" && !Array.isArray(sv) && tv && typeof tv === "object" && !Array.isArray(tv)) {
-      result[key] = deepMerge(tv as Record<string, any>, sv as Record<string, any>) as T[keyof T]
+      result[key] = deepMerge(tv as Record<string, any>, sv as Record<string, any>) as T[keyof T];
     } else if (sv !== undefined) {
-      result[key] = sv as T[keyof T]
+      result[key] = sv as T[keyof T];
     }
   }
-  return result
+  return result;
 }

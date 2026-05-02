@@ -1,42 +1,42 @@
 export interface GiftRule {
-  giftName: string
-  giftId?: number
-  coinType: "gold" | "silver" | "all"
-  channel: "A" | "B" | "both"
-  strengthAdd: number
-  duration: number
+  giftName: string;
+  giftId?: number;
+  coinType: "gold" | "silver" | "all";
+  channel: "A" | "B" | "both";
+  strengthAdd: number;
+  duration: number;
 }
 
-export const BILIBILI_SOURCE_TYPES = ["open-platform", "broadcast"] as const
-export type BilibiliSourceType = typeof BILIBILI_SOURCE_TYPES[number]
+export const BILIBILI_SOURCE_TYPES = ["open-platform", "broadcast"] as const;
+export type BilibiliSourceType = (typeof BILIBILI_SOURCE_TYPES)[number];
 
 export interface AppConfig {
   bilibili: {
-    source: BilibiliSourceType
+    source: BilibiliSourceType;
     openPlatform: {
-      appKey: string
-      appSecret: string
-      code: string
-      appId: number
-    }
+      appKey: string;
+      appSecret: string;
+      code: string;
+      appId: number;
+    };
     broadcast: {
-      roomId: number
-    }
-  }
+      roomId: number;
+    };
+  };
   coyote: {
-    wsPort: number
-  }
+    wsPort: number;
+  };
   server: {
-    httpPort: number
-    host: string
-  }
-  rules: GiftRule[]
+    httpPort: number;
+    host: string;
+  };
+  rules: GiftRule[];
   safety: {
-    limitA: number
-    limitB: number
-    decayEnabled: boolean
-    decayRate: number
-  }
+    limitA: number;
+    limitB: number;
+    decayEnabled: boolean;
+    decayRate: number;
+  };
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -69,4 +69,4 @@ export const DEFAULT_CONFIG: AppConfig = {
     decayEnabled: true,
     decayRate: 2,
   },
-}
+};
