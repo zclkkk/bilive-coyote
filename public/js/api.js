@@ -21,7 +21,7 @@ export const api = {
   },
 
   bilibili: {
-    start: (source, code, appId, appKey, appSecret) => api.post("/api/bilibili/start", { source, code, appId, appKey, appSecret }),
+    start: (params) => api.post("/api/bilibili/start", params),
     stop: () => api.post("/api/bilibili/stop"),
   },
 

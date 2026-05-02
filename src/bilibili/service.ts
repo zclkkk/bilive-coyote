@@ -1,4 +1,5 @@
 import { OpenPlatformSource } from "./open-platform"
+import { BroadcastSource } from "./broadcast"
 import type { BilibiliSource, BilibiliStartInput, BilibiliStatus } from "./types"
 import type { ConfigStore } from "../config/store"
 import type { BilibiliSourceType } from "../config/types"
@@ -12,10 +13,12 @@ export class BilibiliService {
   constructor(config: ConfigStore, eventBus: EventBus) {
     this.config = config
     const openPlatform = new OpenPlatformSource(config, eventBus)
+    const broadcast = new BroadcastSource(config, eventBus)
     this.sources = {
-      "open-platform": openPlatform,
+      [openPlatform.type]: openPlatform,
+      [broadcast.type]: broadcast,
     }
-    this.active = openPlatform
+    this.active = this.getSource(config.bilibili.source)
   }
 
   async start(input: BilibiliStartInput): Promise<void> {
@@ -38,6 +41,6 @@ export class BilibiliService {
   private getSource(source: BilibiliSourceType): BilibiliSource {
     const implementation = this.sources[source]
     if (implementation) return implementation
-    throw new Error("观众端 WS 模式尚未实现")
+    throw new Error(`Unknown source: ${source}`)
   }
 }
