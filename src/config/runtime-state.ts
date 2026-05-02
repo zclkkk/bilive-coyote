@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "fs";
-import { isAbsolute, resolve } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 
 /**
  * 运行时瞬态，和用户配置 (config.json) 分离存储。

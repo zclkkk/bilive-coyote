@@ -85,7 +85,7 @@ export class StrengthManager {
       if (actualDelta > 0) {
         this.channels[ch].value = newValue;
         this.channels[ch].expiries.push({
-          until: Date.now() + e.duration! * 1000,
+          until: Date.now() + (e.duration ?? 0) * 1000,
           delta: actualDelta,
         });
       }

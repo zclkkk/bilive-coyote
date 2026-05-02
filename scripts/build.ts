@@ -1,5 +1,5 @@
-import { mkdirSync, rmSync } from "fs";
-import { join } from "path";
+import { mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
 
 const APP_NAME = "bilive-coyote";
 const DIST_DIR = "dist";

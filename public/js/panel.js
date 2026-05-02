@@ -114,7 +114,7 @@ function renderRules() {
     div.className = "rule-item";
     div.innerHTML = `
       <span class="rule-name">${escapeHtml(r.giftName)}</span>
-      <span class="rule-effect">${r.channel === "both" ? "双通道" : r.channel + "通道"} +${r.strengthAdd} 持续${r.duration}s</span>
+      <span class="rule-effect">${r.channel === "both" ? "双通道" : `${r.channel}通道`} +${r.strengthAdd} 持续${r.duration}s</span>
       <button class="btn btn-danger btn-small" data-idx="${i}">删除</button>
     `;
     container.appendChild(div);
@@ -122,7 +122,7 @@ function renderRules() {
 
   container.querySelectorAll("[data-idx]").forEach((btn) => {
     btn.onclick = async () => {
-      const idx = parseInt(btn.dataset.idx);
+      const idx = parseInt(btn.dataset.idx, 10);
       currentRules = currentRules.filter((_, i) => i !== idx);
       await api.config.rules.set(currentRules);
       renderRules();
@@ -167,7 +167,7 @@ function setupEventListeners() {
     try {
       await api.bilibili.start(params);
     } catch (e) {
-      alert("启动失败: " + e.message);
+      alert(`启动失败: ${e.message}`);
     } finally {
       startBtn.textContent = "开始监听";
       startBtn.disabled = false;
@@ -180,10 +180,10 @@ function setupEventListeners() {
 
   $("#save-safety").onclick = async () => {
     const safety = {
-      limitA: parseInt($("#limitA").value),
-      limitB: parseInt($("#limitB").value),
+      limitA: parseInt($("#limitA").value, 10),
+      limitB: parseInt($("#limitB").value, 10),
       decayEnabled: $("#decayEnabled").checked,
-      decayRate: parseInt($("#decayRate").value),
+      decayRate: parseInt($("#decayRate").value, 10),
     };
 
     await api.config.set({ safety });
@@ -195,8 +195,8 @@ function setupEventListeners() {
   $("#add-rule-btn").onclick = async () => {
     const name = $("#rule-name").value.trim();
     const channel = $("#rule-channel").value;
-    const strength = parseInt($("#rule-strength").value);
-    const duration = parseInt($("#rule-duration").value);
+    const strength = parseInt($("#rule-strength").value, 10);
+    const duration = parseInt($("#rule-duration").value, 10);
 
     if (!name || !strength || !duration) return;
 
@@ -222,7 +222,7 @@ function buildStartParams(source) {
     const appKey = $("#appKey").value.trim();
     const appSecret = $("#appSecret").value.trim();
     const code = $("#code").value.trim();
-    const appId = parseInt($("#appId").value);
+    const appId = parseInt($("#appId").value, 10);
     if (!appKey || !appSecret) {
       alert("请填写 AppKey 和 AppSecret");
       return null;
@@ -233,7 +233,7 @@ function buildStartParams(source) {
     }
     return { source, code, appId, appKey, appSecret };
   }
-  const roomId = parseInt($("#roomId").value);
+  const roomId = parseInt($("#roomId").value, 10);
   if (!roomId) {
     alert("请填写房间号");
     return null;

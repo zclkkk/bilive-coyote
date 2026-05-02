@@ -44,10 +44,10 @@ export function parseStrengthFeedback(
   const match = message.match(/^strength-(\d+)\+(\d+)\+(\d+)\+(\d+)$/);
   if (!match) return null;
   return {
-    a: parseInt(match[1]),
-    b: parseInt(match[2]),
-    limitA: parseInt(match[3]),
-    limitB: parseInt(match[4]),
+    a: parseInt(match[1], 10),
+    b: parseInt(match[2], 10),
+    limitA: parseInt(match[3], 10),
+    limitB: parseInt(match[4], 10),
   };
 }
 

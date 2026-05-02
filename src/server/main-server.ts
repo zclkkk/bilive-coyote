@@ -65,11 +65,10 @@ export class MainServer {
       if (handler) {
         try {
           return await handler(req, url);
-        } catch (e: any) {
-          if (e instanceof ValidationError) {
-            return Response.json({ error: e.message }, { status: 400 });
-          }
-          return Response.json({ error: e.message }, { status: 500 });
+        } catch (e) {
+          const status = e instanceof ValidationError ? 400 : 500;
+          const message = e instanceof Error ? e.message : String(e);
+          return Response.json({ error: message }, { status });
         }
       }
       return Response.json({ error: "Not found" }, { status: 404 });

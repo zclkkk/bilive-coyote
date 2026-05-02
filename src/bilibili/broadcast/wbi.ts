@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 
 const MIXIN_KEY_ENC_TAB = [
   46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41,
@@ -71,8 +71,8 @@ export async function fetchDanmuInfo(roomId: number): Promise<{ key: string; url
     Cookie: `buvid3=${buvid3}`,
   });
   const { img_url, sub_url } = nav.data.wbi_img;
-  const imgKey = img_url.split("/").pop()!.split(".")[0];
-  const subKey = sub_url.split("/").pop()!.split(".")[0];
+  const imgKey = img_url.split("/").pop()?.split(".")[0] ?? "";
+  const subKey = sub_url.split("/").pop()?.split(".")[0] ?? "";
   const mixinKey = getMixinKey(imgKey + subKey);
 
   const signed = signWbi({ id: longRoomId }, mixinKey);
