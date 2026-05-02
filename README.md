@@ -51,9 +51,11 @@ bun run src/main.ts
 src/
   main.ts                # 入口
   bilibili/
-    signer.ts            # HMAC-SHA256 + MD5 签名
-    api.ts               # B站开放平台 API
-    danmaku-ws.ts        # 弹幕 WebSocket 客户端
+    service.ts           # B站数据源门面
+    live-socket.ts       # 直播 WS 传输/解压/重连
+    open-platform.ts     # B站开放平台数据源
+    open-platform-*.ts   # 开放平台签名与消息解析
+    types.ts             # 数据源接口
   coyote/
     server.ts            # DG-LAB WS 服务端 (端口 9999)
     message.ts           # 消息解析与构造
@@ -94,13 +96,13 @@ public/
 
 - **强度上限**：A/B 通道强度不可超越的上限 (0-200)，取 min(本端设置, APP端上限)
 - **衰减**：礼物效果到期后逐步衰减回基线
-- **紧急停止**：一键归零所有通道 + 清空波形队列
+- **紧急停止**：一键归零所有通道
 - **断连保护**：Coyote WS 断连时自动归零
 
 ## 数据流
 
 ```
-直播间礼物 → B站弹幕WS(op=5) → 解析SEND_GIFT → EventBus
+直播间礼物 → B站数据源 → GiftEvent → EventBus
   → GiftMapper匹配规则 → StrengthManager(安全限制+衰减)
     → CoyoteServer → DG-LAB APP → 蓝牙 → 设备
     → PanelWS → 控制面板

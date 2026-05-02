@@ -4,8 +4,7 @@ import type { ConfigStore } from "../config/store"
 import type { EventBus } from "../engine/event-bus"
 import type { CoyoteServer } from "../coyote/server"
 import type { StrengthManager } from "../engine/strength-manager"
-import type { BilibiliClient } from "../bilibili/api"
-import type { DanmakuWS } from "../bilibili/danmaku-ws"
+import type { BilibiliService } from "../bilibili/service"
 import { ValidationError } from "../config/schema"
 import { createRouter, matchRoute } from "./router"
 
@@ -34,10 +33,7 @@ const PUBLIC_DIR = resolvePublicDir()
 export class MainServer {
   private config: ConfigStore
   private eventBus: EventBus
-  private coyote: CoyoteServer
   private strengthMgr: StrengthManager
-  private bilibili: BilibiliClient
-  private danmaku: DanmakuWS
   private routes: Map<string, (req: Request, url: URL) => Promise<Response> | Response>
   private panelClients: Set<any> = new Set()
   private server: any = null
@@ -47,16 +43,12 @@ export class MainServer {
     eventBus: EventBus,
     coyote: CoyoteServer,
     strengthMgr: StrengthManager,
-    bilibili: BilibiliClient,
-    danmaku: DanmakuWS,
+    bilibili: BilibiliService,
   ) {
     this.config = config
     this.eventBus = eventBus
-    this.coyote = coyote
     this.strengthMgr = strengthMgr
-    this.bilibili = bilibili
-    this.danmaku = danmaku
-    this.routes = createRouter(config, eventBus, coyote, strengthMgr, bilibili)
+    this.routes = createRouter(config, coyote, strengthMgr, bilibili)
     this.setupEventForwarding()
   }
 

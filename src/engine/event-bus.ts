@@ -1,4 +1,5 @@
 import { EventEmitter } from "events"
+import type { BilibiliSourceType } from "../config/types"
 
 export interface GiftEvent {
   giftId: number
@@ -23,7 +24,9 @@ export interface StrengthChangeEvent {
 
 export interface BilibiliStatusEvent {
   connected: boolean
+  source?: BilibiliSourceType
   roomId?: number
+  gameId?: string | null
   error?: string
 }
 

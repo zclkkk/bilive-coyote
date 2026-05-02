@@ -10,21 +10,30 @@ export class ValidationError extends Error {
 const COIN_TYPES = new Set(["gold", "silver", "all"])
 const RULE_CHANNELS = new Set(["A", "B", "both"])
 const STRENGTH_CHANNELS = new Set(["A", "B"])
+const BILIBILI_SOURCES = new Set(["open-platform", "viewer"])
 
 export function validateConfig(value: unknown): AppConfig {
   const data = object(value, "config")
   const bilibili = object(data.bilibili, "bilibili")
+  const openPlatform = object(bilibili.openPlatform, "bilibili.openPlatform")
+  const viewer = object(bilibili.viewer, "bilibili.viewer")
   const coyote = object(data.coyote, "coyote")
   const server = object(data.server, "server")
   const safety = object(data.safety, "safety")
 
   return {
     bilibili: {
-      appKey: string(bilibili.appKey, "bilibili.appKey"),
-      appSecret: string(bilibili.appSecret, "bilibili.appSecret"),
-      code: string(bilibili.code, "bilibili.code"),
-      appId: integer(bilibili.appId, "bilibili.appId", 0),
-      gameId: string(bilibili.gameId ?? "", "bilibili.gameId"),
+      source: enumString(bilibili.source, "bilibili.source", BILIBILI_SOURCES) as AppConfig["bilibili"]["source"],
+      openPlatform: {
+        appKey: string(openPlatform.appKey, "bilibili.openPlatform.appKey"),
+        appSecret: string(openPlatform.appSecret, "bilibili.openPlatform.appSecret"),
+        code: string(openPlatform.code, "bilibili.openPlatform.code"),
+        appId: integer(openPlatform.appId, "bilibili.openPlatform.appId", 0),
+        gameId: string(openPlatform.gameId ?? "", "bilibili.openPlatform.gameId"),
+      },
+      viewer: {
+        roomId: integer(viewer.roomId, "bilibili.viewer.roomId", 0),
+      },
     },
     coyote: {
       wsPort: integer(coyote.wsPort, "coyote.wsPort", 1, 65535),
@@ -58,17 +67,21 @@ export function validateManualStrength(value: unknown): { channel: "A" | "B"; va
 }
 
 export function validateBilibiliStart(value: unknown): {
+  source?: AppConfig["bilibili"]["source"]
   code?: string
   appId?: number
   appKey?: string
   appSecret?: string
+  roomId?: number
 } {
   const data = object(value, "body")
   return {
+    source: optionalEnumString(data.source, "source", BILIBILI_SOURCES) as AppConfig["bilibili"]["source"] | undefined,
     code: optionalNonEmptyString(data.code, "code"),
     appId: optionalInteger(data.appId, "appId", 1),
     appKey: optionalNonEmptyString(data.appKey, "appKey"),
     appSecret: optionalNonEmptyString(data.appSecret, "appSecret"),
+    roomId: optionalInteger(data.roomId, "roomId", 1),
   }
 }
 
@@ -133,4 +146,9 @@ function enumString(value: unknown, name: string, allowed: Set<string>): string 
   const result = string(value, name)
   if (!allowed.has(result)) throw new ValidationError(`${name} is invalid`)
   return result
+}
+
+function optionalEnumString(value: unknown, name: string, allowed: Set<string>): string | undefined {
+  if (value === undefined) return undefined
+  return enumString(value, name, allowed)
 }

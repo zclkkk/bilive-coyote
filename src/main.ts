@@ -1,6 +1,5 @@
 import { ConfigStore } from "./config/store"
-import { BilibiliClient } from "./bilibili/api"
-import { DanmakuWS } from "./bilibili/danmaku-ws"
+import { BilibiliService } from "./bilibili/service"
 import { CoyoteServer } from "./coyote/server"
 import { EventBus } from "./engine/event-bus"
 import { GiftMapper } from "./engine/gift-mapper"
@@ -12,13 +11,11 @@ async function main() {
 
   const config = new ConfigStore()
   const eventBus = new EventBus()
-  const bilibili = new BilibiliClient(config)
-  const danmaku = new DanmakuWS(eventBus)
-  bilibili.setDanmaku(danmaku)
+  const bilibili = new BilibiliService(config, eventBus)
   const coyote = new CoyoteServer(config, eventBus)
   const giftMapper = new GiftMapper(config, eventBus)
   const strengthMgr = new StrengthManager(config, eventBus, coyote)
-  const mainServer = new MainServer(config, eventBus, coyote, strengthMgr, bilibili, danmaku)
+  const mainServer = new MainServer(config, eventBus, coyote, strengthMgr, bilibili)
 
   eventBus.on("bilibili:status", (status) => {
     console.log("[Bilibili] Status:", status)

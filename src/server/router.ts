@@ -1,16 +1,14 @@
 import { ConfigStore } from "../config/store"
-import { EventBus } from "../engine/event-bus"
 import type { CoyoteServer } from "../coyote/server"
 import type { StrengthManager } from "../engine/strength-manager"
-import type { BilibiliClient } from "../bilibili/api"
+import type { BilibiliService } from "../bilibili/service"
 import { validateBilibiliStart, validateManualStrength } from "../config/schema"
 
 export function createRouter(
   config: ConfigStore,
-  eventBus: EventBus,
   coyote: CoyoteServer,
   strengthMgr: StrengthManager,
-  bilibili: BilibiliClient,
+  bilibili: BilibiliService,
 ) {
   const routes: Map<string, (req: Request, url: URL) => Promise<Response> | Response> = new Map()
 
@@ -29,16 +27,23 @@ export function createRouter(
 
   routes.set("POST /api/bilibili/start", async (req) => {
     const body = validateBilibiliStart(await req.json())
-    const code = body.code || config.bilibili.code
-    const appId = body.appId || config.bilibili.appId
-    if (!code || !appId) {
-      return Response.json({ error: "code and appId required" }, { status: 400 })
+    const source = body.source ?? config.bilibili.source
+    if (source === "open-platform") {
+      const openPlatform = config.bilibili.openPlatform
+      const code = body.code ?? openPlatform.code
+      const appId = body.appId ?? openPlatform.appId
+      const appKey = body.appKey ?? openPlatform.appKey
+      const appSecret = body.appSecret ?? openPlatform.appSecret
+      if (!code || !appId || !appKey || !appSecret) {
+        return Response.json({ error: "code, appId, appKey and appSecret required" }, { status: 400 })
+      }
     }
-    if (body.appKey && body.appSecret) {
-      bilibili.setCredentials(body.appKey, body.appSecret)
+    if (source === "viewer") {
+      const roomId = body.roomId ?? config.bilibili.viewer.roomId
+      if (!roomId) return Response.json({ error: "roomId required" }, { status: 400 })
     }
     try {
-      await bilibili.start(code, appId)
+      await bilibili.start({ ...body, source })
       return Response.json({ success: true })
     } catch (e: any) {
       return Response.json({ error: e.message }, { status: 500 })

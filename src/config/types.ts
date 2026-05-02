@@ -7,14 +7,22 @@ export interface GiftRule {
   duration: number
 }
 
+export type BilibiliSourceType = "open-platform" | "viewer"
+
 export interface AppConfig {
   bilibili: {
-    appKey: string
-    appSecret: string
-    code: string
-    appId: number
-    /** 上次 start 得到的 game_id；进程重启后用于清理残留会话，正常 end 后置空 */
-    gameId?: string
+    source: BilibiliSourceType
+    openPlatform: {
+      appKey: string
+      appSecret: string
+      code: string
+      appId: number
+      /** 上次 start 得到的 game_id；进程重启后用于清理残留会话，正常 end 后置空 */
+      gameId?: string
+    }
+    viewer: {
+      roomId: number
+    }
   }
   coyote: {
     wsPort: number
@@ -34,11 +42,17 @@ export interface AppConfig {
 
 export const DEFAULT_CONFIG: AppConfig = {
   bilibili: {
-    appKey: "",
-    appSecret: "",
-    code: "",
-    appId: 0,
-    gameId: "",
+    source: "open-platform",
+    openPlatform: {
+      appKey: "",
+      appSecret: "",
+      code: "",
+      appId: 0,
+      gameId: "",
+    },
+    viewer: {
+      roomId: 0,
+    },
   },
   coyote: {
     wsPort: 9999,

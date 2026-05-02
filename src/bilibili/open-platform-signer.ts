@@ -1,6 +1,6 @@
-import { createHmac, createHash } from "crypto"
+import { createHash, createHmac } from "crypto"
 
-export function signRequest(params: Record<string, unknown>, appKey: string, appSecret: string): Record<string, string> {
+export function signOpenPlatformRequest(params: Record<string, unknown>, appKey: string, appSecret: string): Record<string, string> {
   const timestamp = Math.floor(Date.now() / 1000)
   const nonce = Math.floor(Math.random() * 100000) + timestamp
 
@@ -13,7 +13,7 @@ export function signRequest(params: Record<string, unknown>, appKey: string, app
     "x-bili-timestamp": String(timestamp),
   }
 
-  const data = Object.entries(headers).map(([k, v]) => `${k}:${v}`).join("\n")
+  const data = Object.entries(headers).map(([key, value]) => `${key}:${value}`).join("\n")
   const signature = createHmac("sha256", appSecret).update(data).digest("hex")
 
   return {

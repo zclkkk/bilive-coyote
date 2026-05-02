@@ -48,7 +48,7 @@ async function loadStatus() {
 }
 
 function renderConfig() {
-  const b = currentConfig.bilibili || {}
+  const b = currentConfig.bilibili?.openPlatform || {}
   $("#appKey").value = b.appKey || ""
   $("#appSecret").value = b.appSecret || ""
   $("#code").value = b.code || ""
@@ -152,7 +152,7 @@ function setupEventListeners() {
     startBtn.disabled = true
 
     try {
-      const startResult = await api.bilibili.start(code, appId, appKey, appSecret)
+      const startResult = await api.bilibili.start("open-platform", code, appId, appKey, appSecret)
       if (startResult.error) {
         alert("连接失败: " + startResult.error)
         return
