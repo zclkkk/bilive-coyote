@@ -1,9 +1,9 @@
-import { BilibiliLiveSocket } from "./live-socket"
-import { parseOpenPlatformGift } from "./open-platform-parser"
-import { signOpenPlatformRequest } from "./open-platform-signer"
-import type { BilibiliSource, BilibiliStartInput, BilibiliStatus } from "./types"
-import type { ConfigStore } from "../config/store"
-import type { BilibiliStatusEvent, EventBus } from "../engine/event-bus"
+import { BilibiliLiveSocket } from "../live-socket"
+import { parseOpenPlatformGift } from "./parser"
+import { signOpenPlatformRequest } from "./signer"
+import type { BilibiliSource, BilibiliStartInput, BilibiliStatus } from "../types"
+import type { ConfigStore } from "../../config/store"
+import type { BilibiliStatusEvent, EventBus } from "../../engine/event-bus"
 
 const BASE_URL = "https://live-open.biliapi.com"
 

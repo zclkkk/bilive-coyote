@@ -53,9 +53,8 @@ src/
   bilibili/
     service.ts           # B站数据源门面
     live-socket.ts       # 直播 WS 传输/解压/重连
-    open-platform.ts     # B站开放平台数据源
-    open-platform-*.ts   # 开放平台签名与消息解析
     types.ts             # 数据源接口
+    open-platform/       # B站开放平台数据源实现
   coyote/
     server.ts            # DG-LAB WS 服务端 (端口 9999)
     message.ts           # 消息解析与构造

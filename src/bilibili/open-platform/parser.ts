@@ -1,4 +1,4 @@
-import type { GiftEvent } from "../engine/event-bus"
+import type { GiftEvent } from "../../engine/event-bus"
 
 const CMD_OPEN_PLATFORM_GIFT = "LIVE_OPEN_PLATFORM_SEND_GIFT"
 
