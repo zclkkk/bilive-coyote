@@ -8,10 +8,6 @@ interface StrengthEntry {
   expiries: { until: number; delta: number }[]
 }
 
-// 内部命令发出后这段时间内的 APP feedback 视为"我方命令的回声"，避免连发礼物时
-// 旧命令的 feedback 错误覆盖新值。时间窗口需大于一次完整往返
-const APP_FEEDBACK_ECHO_WINDOW_MS = 1500
-
 export class StrengthManager {
   private config: ConfigStore
   private eventBus: EventBus
@@ -22,7 +18,6 @@ export class StrengthManager {
   }
   private appLimits = { a: 200, b: 200 }
   private decayTimer: ReturnType<typeof setInterval> | null = null
-  private lastInternalChangeAt = 0
 
   constructor(config: ConfigStore, eventBus: EventBus, coyote: CoyoteServer) {
     this.config = config
@@ -38,28 +33,15 @@ export class StrengthManager {
     this.enforceLimits()
   }
 
-  /**
-   * APP 推送 strength feedback 时调用，把内部状态同步到 APP 实际值。
-   * 用于检测用户在手机 APP 上的手动调整。
-   * 通过时间窗口忽略我方命令的回声，避免礼物连发时旧 feedback 覆盖新值。
-   */
-  syncFromApp(strengthA: number, strengthB: number): void {
-    if (Date.now() - this.lastInternalChangeAt < APP_FEEDBACK_ECHO_WINDOW_MS) return
-    for (const [ch, val] of [["A", strengthA] as const, ["B", strengthB] as const]) {
-      const entry = this.channels[ch]
-      if (entry.value !== val) {
-        entry.value = val
-        entry.baseline = val
-        entry.expiries = []
-      }
-    }
+  applyAppFeedback(strengthA: number, strengthB: number): void {
+    this.applyChannelFeedback("A", strengthA)
+    this.applyChannelFeedback("B", strengthB)
   }
 
   resetLocal(): void {
     this.channels.A = { value: 0, baseline: 0, expiries: [] }
     this.channels.B = { value: 0, baseline: 0, expiries: [] }
     this.appLimits = { a: 200, b: 200 }
-    this.lastInternalChangeAt = 0
   }
 
   private getLimit(ch: "A" | "B"): number {
@@ -76,7 +58,6 @@ export class StrengthManager {
       this.channels[ch].value = 0
       this.channels[ch].baseline = 0
       this.channels[ch].expiries = []
-      this.lastInternalChangeAt = Date.now()
       this.coyote.sendStrength(ch, 2, 0)
       this.coyote.sendClear(ch)
       return
@@ -109,7 +90,6 @@ export class StrengthManager {
     }
 
     const val = this.channels[ch].value
-    this.lastInternalChangeAt = Date.now()
     this.coyote.sendStrength(ch, 2, val)
   }
 
@@ -120,7 +100,6 @@ export class StrengthManager {
         this.channels[ch].value = limit
         this.channels[ch].baseline = limit
         this.channels[ch].expiries = []
-        this.lastInternalChangeAt = Date.now()
         this.coyote.sendStrength(ch, 2, limit)
       }
     }
@@ -141,6 +120,21 @@ export class StrengthManager {
 
   getAppLimit(channel: "A" | "B"): number {
     return channel === "A" ? this.appLimits.a : this.appLimits.b
+  }
+
+  private applyChannelFeedback(channel: "A" | "B", appValue: number): void {
+    const value = Math.min(appValue, this.getLimit(channel))
+    const entry = this.channels[channel]
+
+    if (entry.value !== value) {
+      entry.value = value
+      entry.baseline = value
+      entry.expiries = []
+    }
+
+    if (appValue !== value) {
+      this.coyote.sendStrength(channel, 2, value)
+    }
   }
 
   private startDecayLoop(): void {

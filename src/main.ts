@@ -27,7 +27,7 @@ async function main() {
   eventBus.on("coyote:status", (status) => {
     if (status.paired) {
       strengthMgr.updateAppLimits(status.limitA, status.limitB)
-      strengthMgr.syncFromApp(status.strengthA, status.strengthB)
+      strengthMgr.applyAppFeedback(status.strengthA, status.strengthB)
     } else {
       strengthMgr.resetLocal()
     }
