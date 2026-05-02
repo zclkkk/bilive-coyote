@@ -13,14 +13,13 @@ export class GiftMapper {
   }
 
   private onGift(gift: GiftEvent): void {
-    const rules = this.config.rules
-    // first-match: 找到第一条匹配规则就停止，避免同一礼物被多条规则重复加强度
-    for (const rule of rules) {
-      if (this.matchRule(rule, gift)) {
-        this.applyRule(rule, gift)
-        return
-      }
-    }
+    const rule = this.config.rules.find(rule => this.matchRule(rule, gift))
+    const strengthDelta = rule ? this.applyRule(rule, gift) : "—"
+
+    this.eventBus.emit("gift:log", {
+      ...gift,
+      strengthDelta,
+    })
   }
 
   private matchRule(rule: GiftRule, gift: GiftEvent): boolean {
@@ -30,7 +29,7 @@ export class GiftMapper {
     return true
   }
 
-  private applyRule(rule: GiftRule, gift: GiftEvent): void {
+  private applyRule(rule: GiftRule, gift: GiftEvent): string {
     const channels: ("A" | "B")[] = rule.channel === "both" ? ["A", "B"] : [rule.channel]
     const delta = rule.strengthAdd * gift.num
 
@@ -46,9 +45,6 @@ export class GiftMapper {
       this.eventBus.emit("strength:change", event)
     }
 
-    this.eventBus.emit("gift:log", {
-      ...gift,
-      strengthDelta: channels.map(ch => `${ch}+${delta}`).join(" "),
-    })
+    return channels.map(ch => `${ch}+${delta}`).join(" ")
   }
 }
