@@ -12,7 +12,6 @@ export class BilibiliClient {
   private appId = 0
   private gameId: string | null = null
   private httpHeartbeatTimer: ReturnType<typeof setInterval> | null = null
-  private _connected = false
   private _roomId: number | null = null
 
   constructor(config: ConfigStore) {
@@ -90,7 +89,6 @@ export class BilibiliClient {
     const { game_info, websocket_info } = data
     this.gameId = game_info.game_id
     this.appId = appId
-    this._connected = true
     this._roomId = parseRoomIdFromAuthBody(websocket_info?.auth_body)
 
     await this.config.set({
@@ -147,15 +145,16 @@ export class BilibiliClient {
     }
     this.gameId = null
     this.appId = 0
-    this._connected = false
     this._roomId = null
   }
 
   getStatus() {
+    const danmakuStatus = this.danmaku?.getStatus()
     return {
-      connected: this._connected,
-      roomId: this._roomId,
+      connected: danmakuStatus?.connected ?? false,
+      roomId: danmakuStatus?.roomId ?? this._roomId,
       gameId: this.gameId,
+      error: danmakuStatus?.error,
     }
   }
 }

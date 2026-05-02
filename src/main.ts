@@ -13,7 +13,7 @@ async function main() {
   const config = new ConfigStore()
   const eventBus = new EventBus()
   const bilibili = new BilibiliClient(config)
-  const danmaku = new DanmakuWS(bilibili, eventBus)
+  const danmaku = new DanmakuWS(eventBus)
   bilibili.setDanmaku(danmaku)
   const coyote = new CoyoteServer(config, eventBus)
   const giftMapper = new GiftMapper(config, eventBus)

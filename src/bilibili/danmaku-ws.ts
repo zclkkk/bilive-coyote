@@ -1,7 +1,6 @@
 import { inflateSync, brotliDecompressSync } from "zlib"
 import type { EventBus } from "../engine/event-bus"
-import type { GiftEvent } from "../engine/event-bus"
-import type { BilibiliClient } from "./api"
+import type { BilibiliStatusEvent, GiftEvent } from "../engine/event-bus"
 
 const WS_OP_HEARTBEAT = 2
 const WS_OP_HEARTBEAT_REPLY = 3
@@ -24,8 +23,9 @@ export class DanmakuWS {
   private ws: WebSocket | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
   private eventBus: EventBus
-  private bilibili: BilibiliClient
   private roomId: number | null = null
+  private connected = false
+  private error: string | undefined
 
   private wssLinks: string[] = []
   private authBody: string = ""
@@ -34,8 +34,7 @@ export class DanmakuWS {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private intentionalDisconnect: boolean = false
 
-  constructor(bilibili: BilibiliClient, eventBus: EventBus) {
-    this.bilibili = bilibili
+  constructor(eventBus: EventBus) {
     this.eventBus = eventBus
   }
 
@@ -45,13 +44,13 @@ export class DanmakuWS {
       auth = JSON.parse(authBody)
     } catch (e: any) {
       console.error("[Danmaku] Invalid auth_body:", e.message)
-      this.eventBus.emit("bilibili:status", { connected: false, error: "auth_body 格式错误" })
+      this.setStatus(false, "auth_body 格式错误")
       return
     }
     const url = wssLinks[0]
     if (!url) {
       console.error("[Danmaku] No wss_link provided")
-      this.eventBus.emit("bilibili:status", { connected: false, error: "wss_link 为空" })
+      this.setStatus(false, "wss_link 为空")
       return
     }
 
@@ -61,6 +60,7 @@ export class DanmakuWS {
     this.reconnectAttempts = 0
     this.intentionalDisconnect = false
     this.roomId = typeof auth.roomid === "number" ? auth.roomid : null
+    this.setStatus(false)
 
     this.doConnect(url, auth)
   }
@@ -85,9 +85,10 @@ export class DanmakuWS {
       console.log("[Danmaku] Disconnected")
       this.cleanup()
       if (!this.intentionalDisconnect) {
+        this.setStatus(false, "弹幕连接断开，正在重连")
         this.tryReconnect()
       } else {
-        this.eventBus.emit("bilibili:status", { connected: false })
+        this.setStatus(false)
       }
     }
 
@@ -99,10 +100,7 @@ export class DanmakuWS {
   private tryReconnect(): void {
     if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       console.error(`[Danmaku] Reconnect failed after ${MAX_RECONNECT_ATTEMPTS} attempts`)
-      this.eventBus.emit("bilibili:status", {
-        connected: false,
-        error: `弹幕连接断开，已重试 ${MAX_RECONNECT_ATTEMPTS} 次仍失败，请手动重新连接`,
-      })
+      this.setStatus(false, `弹幕连接断开，已重试 ${MAX_RECONNECT_ATTEMPTS} 次仍失败，请手动重新连接`)
       return
     }
 
@@ -118,7 +116,7 @@ export class DanmakuWS {
       auth = JSON.parse(this.authBody)
     } catch (e: any) {
       console.error("[Danmaku] Invalid stored auth_body:", e.message)
-      this.eventBus.emit("bilibili:status", { connected: false, error: "重连凭证失效，请手动重新连接" })
+      this.setStatus(false, "重连凭证失效，请手动重新连接")
       return
     }
 
@@ -168,7 +166,7 @@ export class DanmakuWS {
           console.log("[Danmaku] Auth success, connected to room")
           this.reconnectAttempts = 0
           this.startHeartbeat()
-          this.eventBus.emit("bilibili:status", { connected: true, roomId: this.roomId ?? undefined })
+          this.setStatus(true)
           break
 
         case WS_OP_HEARTBEAT_REPLY:
@@ -250,6 +248,7 @@ export class DanmakuWS {
 
   disconnect(): void {
     this.intentionalDisconnect = true
+    this.roomId = null
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -258,6 +257,22 @@ export class DanmakuWS {
     if (this.ws) {
       this.ws.close()
       this.ws = null
+    } else {
+      this.setStatus(false)
     }
+  }
+
+  getStatus(): BilibiliStatusEvent {
+    return {
+      connected: this.connected,
+      roomId: this.roomId ?? undefined,
+      error: this.error,
+    }
+  }
+
+  private setStatus(connected: boolean, error?: string): void {
+    this.connected = connected
+    this.error = error
+    this.eventBus.emit("bilibili:status", this.getStatus())
   }
 }
