@@ -19,35 +19,7 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = cli::Cli::parse();
 
-    let config_path = if let Ok(env_path) = std::env::var("CONFIG_PATH") {
-        if !env_path.is_empty() {
-            if std::path::Path::new(&env_path).is_absolute() {
-                env_path
-            } else {
-                format!("{}/{}", std::env::current_dir()?.display(), env_path)
-            }
-        } else {
-            cli.config
-        }
-    } else {
-        cli.config
-    };
-
-    let state_path = if let Ok(env_path) = std::env::var("STATE_PATH") {
-        if !env_path.is_empty() {
-            if std::path::Path::new(&env_path).is_absolute() {
-                env_path
-            } else {
-                format!("{}/{}", std::env::current_dir()?.display(), env_path)
-            }
-        } else {
-            cli.state
-        }
-    } else {
-        cli.state
-    };
-
-    let app = app::App::init(&config_path, &state_path).await?;
+    let app = app::App::init(&cli.config, &cli.state).await?;
     app.run().await?;
 
     Ok(())

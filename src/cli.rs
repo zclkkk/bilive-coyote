@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -6,9 +7,9 @@ use clap::Parser;
     about = "Bilibili live gift to DG-LAB Coyote strength LAN bridge"
 )]
 pub struct Cli {
-    #[arg(long, default_value = "config.json")]
-    pub config: String,
+    #[arg(long, env = "CONFIG_PATH", default_value = "config.json")]
+    pub config: PathBuf,
 
-    #[arg(long, default_value = "state.json")]
-    pub state: String,
+    #[arg(long, env = "STATE_PATH", default_value = "state.json")]
+    pub state: PathBuf,
 }

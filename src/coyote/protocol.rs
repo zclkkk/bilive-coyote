@@ -4,19 +4,9 @@ pub const ERR_SUCCESS: &str = "200";
 pub const ERR_PEER_DISCONNECTED: &str = "209";
 pub const ERR_INVALID_QR_CLIENT_ID: &str = "210";
 pub const ERR_NO_TARGET_ID: &str = "211";
-#[allow(dead_code)]
-pub const ERR_ALREADY_BOUND: &str = "400";
-#[allow(dead_code)]
-pub const ERR_TARGET_NOT_EXIST: &str = "401";
 pub const ERR_NOT_PAIRED: &str = "402";
 pub const ERR_INVALID_JSON: &str = "403";
-#[allow(dead_code)]
-pub const ERR_PEER_OFFLINE: &str = "404";
 pub const ERR_MESSAGE_TOO_LONG: &str = "405";
-#[allow(dead_code)]
-pub const ERR_CHANNEL_REQUIRED: &str = "406";
-#[allow(dead_code)]
-pub const ERR_INTERNAL_ERROR: &str = "500";
 
 const MAX_MESSAGE_LENGTH: usize = 1950;
 
@@ -100,14 +90,28 @@ pub struct StrengthFeedback {
 }
 
 pub fn parse_strength_feedback(message: &str) -> Option<StrengthFeedback> {
-    let re = regex_lite::Regex::new(r"^strength-(\d+)\+(\d+)\+(\d+)\+(\d+)$").ok()?;
-    let caps = re.captures(message)?;
+    let rest = message.strip_prefix("strength-")?;
+    let mut parts = rest.split('+');
+    let a = parse_u8_part(parts.next()?)?;
+    let b = parse_u8_part(parts.next()?)?;
+    let limit_a = parse_u8_part(parts.next()?)?;
+    let limit_b = parse_u8_part(parts.next()?)?;
+    if parts.next().is_some() {
+        return None;
+    }
     Some(StrengthFeedback {
-        a: caps[1].parse().ok()?,
-        b: caps[2].parse().ok()?,
-        limit_a: caps[3].parse().ok()?,
-        limit_b: caps[4].parse().ok()?,
+        a,
+        b,
+        limit_a,
+        limit_b,
     })
+}
+
+fn parse_u8_part(value: &str) -> Option<u8> {
+    if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    value.parse().ok()
 }
 
 #[cfg(test)]
@@ -167,5 +171,7 @@ mod tests {
     fn test_parse_strength_feedback_invalid() {
         assert!(parse_strength_feedback("invalid").is_none());
         assert!(parse_strength_feedback("strength-10+20").is_none());
+        assert!(parse_strength_feedback("strength-+10+20+80+90").is_none());
+        assert!(parse_strength_feedback("strength-10+20+80+256").is_none());
     }
 }
