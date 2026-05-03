@@ -59,12 +59,16 @@ pub async fn run_live_socket(opts: LiveSocketOptions, cancel: tokio_util::sync::
         let ws_result = connect_async_tls_with_config(url, None, false, None).await;
 
         match ws_result {
-            Ok((ws_stream, _)) => {
-                reconnect_attempts = 0;
-                if let Err(e) = handle_connection(ws_stream, &opts, &cancel).await {
+            Ok((ws_stream, _)) => match handle_connection(ws_stream, &opts, &cancel).await {
+                Ok(auth_success) => {
+                    if auth_success {
+                        reconnect_attempts = 0;
+                    }
+                }
+                Err(e) => {
                     warn!("[{}] Connection handler error: {e}", opts.label);
                 }
-            }
+            },
             Err(e) => {
                 error!("[{}] Connect error: {e}", opts.label);
             }
@@ -127,7 +131,7 @@ async fn handle_connection(
     ws_stream: WebSocketStream<MaybeTlsStream<TcpStream>>,
     opts: &LiveSocketOptions,
     cancel: &tokio_util::sync::CancellationToken,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let (mut ws_sink, mut ws_stream) = ws_stream.split();
 
     let auth_body = serde_json::to_string(&opts.auth)?;
@@ -140,17 +144,22 @@ async fn handle_connection(
 
     let mut heartbeat_interval = tokio::time::interval(HEARTBEAT_INTERVAL);
     heartbeat_interval.tick().await;
+    let mut auth_success = false;
 
     loop {
         tokio::select! {
             msg = ws_stream.next() => {
                 match msg {
                     Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(data))) => {
-                        handle_data(&data, opts).await;
+                        if handle_data(&data, opts).await {
+                            auth_success = true;
+                        }
                     }
                     Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
                         if let Ok(data) = hex::decode(&text) {
-                            handle_data(&data, opts).await;
+                            if handle_data(&data, opts).await {
+                                auth_success = true;
+                            }
                         }
                     }
                     Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => {
@@ -172,7 +181,7 @@ async fn handle_connection(
             }
             _ = cancel.cancelled() => {
                 let _ = ws_sink.close().await;
-                return Ok(());
+                return Ok(auth_success);
             }
         }
     }
@@ -186,7 +195,7 @@ async fn handle_connection(
         })
         .await;
 
-    Ok(())
+    Ok(auth_success)
 }
 
 fn collect_messages(protover: u16, body: &[u8], out: &mut Vec<serde_json::Value>) {
@@ -213,8 +222,9 @@ fn collect_messages(protover: u16, body: &[u8], out: &mut Vec<serde_json::Value>
     }
 }
 
-async fn handle_data(data: &[u8], opts: &LiveSocketOptions) {
+async fn handle_data(data: &[u8], opts: &LiveSocketOptions) -> bool {
     let packets = parse_packets(data);
+    let mut authed = false;
 
     for packet in packets {
         match packet.op {
@@ -228,6 +238,7 @@ async fn handle_data(data: &[u8], opts: &LiveSocketOptions) {
                         error: None,
                     })
                     .await;
+                authed = true;
             }
             OP_HEARTBEAT_REPLY => {}
             OP_MESSAGE => {
@@ -242,4 +253,6 @@ async fn handle_data(data: &[u8], opts: &LiveSocketOptions) {
             }
         }
     }
+
+    authed
 }
