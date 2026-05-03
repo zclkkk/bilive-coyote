@@ -1,0 +1,200 @@
+pub mod broadcast;
+pub mod live_socket;
+pub mod open_platform;
+
+use crate::bilibili::broadcast::BroadcastSource;
+use crate::bilibili::live_socket::LiveSocketStatus;
+use crate::bilibili::open_platform::OpenPlatformSource;
+use crate::config::types::{BilibiliSourceType, GiftEvent};
+use crate::config::{BilibiliStartInput, ConfigStore, RuntimeStateStore};
+use crate::engine::types::BilibiliStatus;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::{mpsc, watch, Mutex};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BilibiliStart {
+    OpenPlatform {
+        #[serde(default)]
+        app_key: Option<String>,
+        #[serde(default)]
+        app_secret: Option<String>,
+        #[serde(default)]
+        code: Option<String>,
+        #[serde(default)]
+        app_id: Option<u64>,
+    },
+    Broadcast {
+        #[serde(default)]
+        room_id: Option<u64>,
+    },
+}
+
+impl From<BilibiliStartInput> for BilibiliStart {
+    fn from(input: BilibiliStartInput) -> Self {
+        match input.source {
+            BilibiliSourceType::OpenPlatform => BilibiliStart::OpenPlatform {
+                app_key: input.app_key,
+                app_secret: input.app_secret,
+                code: input.code,
+                app_id: input.app_id,
+            },
+            BilibiliSourceType::Broadcast => BilibiliStart::Broadcast {
+                room_id: input.room_id,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum BilibiliCommand {
+    Start(BilibiliStart),
+    Stop,
+}
+
+#[derive(Clone)]
+pub struct BilibiliHandle {
+    pub cmd_tx: mpsc::Sender<BilibiliCommand>,
+    pub status: watch::Receiver<BilibiliStatus>,
+}
+
+pub struct BilibiliManager {
+    cmd_rx: mpsc::Receiver<BilibiliCommand>,
+    status_tx: watch::Sender<BilibiliStatus>,
+    current_status: BilibiliStatus,
+    open_platform: OpenPlatformSource,
+    broadcast: BroadcastSource,
+    live_status_rx: Option<mpsc::Receiver<LiveSocketStatus>>,
+}
+
+impl BilibiliManager {
+    pub fn new(
+        config: Arc<Mutex<ConfigStore>>,
+        state: Arc<Mutex<RuntimeStateStore>>,
+        gift_tx: mpsc::Sender<GiftEvent>,
+    ) -> (Self, BilibiliHandle) {
+        let (cmd_tx, cmd_rx) = mpsc::channel(32);
+        let initial_status = BilibiliStatus {
+            source: BilibiliSourceType::OpenPlatform,
+            connected: false,
+            room_id: None,
+            game_id: None,
+            error: None,
+        };
+        let (status_tx, status_rx) = watch::channel(initial_status.clone());
+
+        let (live_status_tx, live_status_rx) = mpsc::channel::<LiveSocketStatus>(16);
+
+        let open_platform = OpenPlatformSource::new(
+            config.clone(),
+            state.clone(),
+            gift_tx.clone(),
+            live_status_tx.clone(),
+        );
+        let broadcast = BroadcastSource::new(config.clone(), gift_tx.clone(), live_status_tx);
+
+        let manager = Self {
+            cmd_rx,
+            status_tx,
+            current_status: initial_status,
+            open_platform,
+            broadcast,
+            live_status_rx: Some(live_status_rx),
+        };
+
+        let handle = BilibiliHandle {
+            cmd_tx,
+            status: status_rx,
+        };
+
+        (manager, handle)
+    }
+
+    pub async fn run(mut self) {
+        let mut live_status_rx = self.live_status_rx.take().unwrap();
+
+        loop {
+            tokio::select! {
+                cmd = self.cmd_rx.recv() => {
+                    match cmd {
+                        Some(BilibiliCommand::Start(start)) => {
+                            self.handle_start(start).await;
+                        }
+                        Some(BilibiliCommand::Stop) => {
+                            self.handle_stop().await;
+                        }
+                        None => break,
+                    }
+                }
+                status = live_status_rx.recv() => {
+                    if let Some(s) = status {
+                        self.current_status.connected = s.connected;
+                        self.current_status.error = s.error;
+                        if s.room_id.is_some() {
+                            self.current_status.room_id = s.room_id;
+                        }
+                        let _ = self.status_tx.send(self.current_status.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    async fn handle_start(&mut self, start: BilibiliStart) {
+        self.handle_stop().await;
+
+        let result = match start {
+            BilibiliStart::OpenPlatform {
+                app_key,
+                app_secret,
+                code,
+                app_id,
+            } => {
+                self.current_status = BilibiliStatus {
+                    source: BilibiliSourceType::OpenPlatform,
+                    connected: false,
+                    room_id: None,
+                    game_id: None,
+                    error: None,
+                };
+                self.open_platform
+                    .start(app_key, app_secret, code, app_id)
+                    .await
+            }
+            BilibiliStart::Broadcast { room_id } => {
+                self.current_status = BilibiliStatus {
+                    source: BilibiliSourceType::Broadcast,
+                    connected: false,
+                    room_id: None,
+                    game_id: None,
+                    error: None,
+                };
+                self.broadcast.start(room_id).await
+            }
+        };
+
+        if let Err(e) = result {
+            self.current_status.error = Some(e.clone());
+            let _ = self.status_tx.send(self.current_status.clone());
+        }
+    }
+
+    async fn handle_stop(&mut self) {
+        match self.current_status.source {
+            BilibiliSourceType::OpenPlatform => {
+                self.open_platform.stop().await;
+            }
+            BilibiliSourceType::Broadcast => {
+                self.broadcast.stop().await;
+            }
+        }
+        self.current_status = BilibiliStatus {
+            source: self.current_status.source,
+            connected: false,
+            room_id: None,
+            game_id: None,
+            error: None,
+        };
+        let _ = self.status_tx.send(self.current_status.clone());
+    }
+}

@@ -1,14 +1,4 @@
-# Reference
-.temp/
-
-# Dependencies
-node_modules/
-
-# Build
-dist/
-bilive-coyote
-bilive-coyote.exe
-
-# Config
+/target
+*.tmp
 config.json
 state.json

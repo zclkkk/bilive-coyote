@@ -1,58 +1,70 @@
-# Bilive-Coyote
+# bilive-coyote
 
-Bilibili 直播礼物到 DG-LAB Coyote 强度的局域网桥接工具。
+Bilibili 直播礼物 → DG-LAB Coyote 强度 LAN 桥接服务。
 
-收到直播间礼物后，项目会按配置好的礼物规则调整 Coyote A/B 通道强度，并把状态同步到 Web 控制面板。
+## 功能
 
-## 特性
+- 接收 B站直播礼物（开放平台 / 弹幕广播两种来源）
+- 按规则映射为 DG-LAB Coyote 设备强度指令
+- 通过局域网 WebSocket 控制 Coyote App
+- Web 控制面板实时查看状态
 
-- Bilibili 礼物实时监听
-- 支持开放平台和 Broadcast 观众端 WS 两种数据源
-- DG-LAB APP 扫码配对，局域网手机/PC 控制面板
-- 强度上限、APP 上限反馈、衰减、紧急停止
-- Bun 单文件可执行程序分发
-
-## 快速开始
+## 构建
 
 ```bash
-curl -fsSL https://bun.sh/install | bash
-bun install
-bun run start
+cargo build --release
 ```
 
-打开 `http://localhost:3000` 进入控制面板。
-
-## 使用流程
-
-1. 选择 Bilibili 数据源。
-2. 开放平台填写 `AppKey`、`AppSecret`、主播身份码、`App ID`；Broadcast 填写直播间房间号。
-3. 点击「开始监听」。
-4. 用 DG-LAB APP 扫描 Coyote 配对二维码。
-5. 配置礼物规则。
-
-## 常用命令
+## 运行
 
 ```bash
-bun run dev
-bun run check
-bun run build
-bun run build:all
+# 使用默认配置文件
+./target/release/bilive-coyote
+
+# 指定配置和状态文件
+./target/release/bilive-coyote --config my-config.json --state my-state.json
+
+# 环境变量方式
+CONFIG_PATH=my-config.json STATE_PATH=my-state.json ./target/release/bilive-coyote
 ```
 
-## 文档
+首次运行会在当前目录生成 `config.json`，编辑后填入 B站开放平台凭证或直播间房间号。
 
-- [安装与分发](docs/setup.md)
-- [Bilibili 数据源](docs/bilibili-sources.md)
-- [DG-LAB Coyote](docs/coyote.md)
-- [开发与架构](docs/development.md)
+## 配置
+
+编辑 `config.json`：
+
+```json
+{
+  "bilibili": {
+    "source": "broadcast",
+    "openPlatform": { "appKey": "", "appSecret": "", "code": "", "appId": 0 },
+    "broadcast": { "roomId": 0 }
+  },
+  "coyote": { "wsPort": 9999 },
+  "server": { "httpPort": 3000, "host": "0.0.0.0" },
+  "rules": [
+    { "giftName": "小心心", "coinType": "silver", "channel": "A", "strengthAdd": 5, "duration": 10 }
+  ],
+  "safety": { "limitA": 80, "limitB": 80, "decayEnabled": true, "decayRate": 2 }
+}
+```
+
+## API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/status` | 全局状态 |
+| POST | `/api/bilibili/start` | 启动 B站连接 |
+| POST | `/api/bilibili/stop` | 停止 B站连接 |
+| GET | `/api/coyote/status` | Coyote 配对状态 |
+| GET | `/api/coyote/qrcode` | 获取配对二维码 |
+| POST | `/api/coyote/strength` | 手动设置强度 |
+| POST | `/api/coyote/emergency` | 紧急停止 |
+| GET/PUT | `/api/config` | 读写配置 |
+| GET/PUT | `/api/config/rules` | 读写规则 |
+| WS | `/ws/panel` | 面板事件推送 |
 
 ## 技术栈
 
-| 层 | 技术 |
-|---|---|
-| 运行时 | Bun |
-| 语言 | TypeScript |
-| HTTP/WS | Bun.serve() |
-| Bilibili | 开放平台 / Broadcast 观众端 WS |
-| Coyote | DG-LAB App WebSocket 协议 |
-| 前端 | 原生 HTML + CSS + JS，Bun HTML import 打包 |
+Rust · Tokio · Axum · tungstenite · reqwest · serde

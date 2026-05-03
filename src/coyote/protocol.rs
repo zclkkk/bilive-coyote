@@ -1,0 +1,171 @@
+use serde::{Deserialize, Serialize};
+
+pub const ERR_SUCCESS: &str = "200";
+pub const ERR_PEER_DISCONNECTED: &str = "209";
+pub const ERR_INVALID_QR_CLIENT_ID: &str = "210";
+pub const ERR_NO_TARGET_ID: &str = "211";
+#[allow(dead_code)]
+pub const ERR_ALREADY_BOUND: &str = "400";
+#[allow(dead_code)]
+pub const ERR_TARGET_NOT_EXIST: &str = "401";
+pub const ERR_NOT_PAIRED: &str = "402";
+pub const ERR_INVALID_JSON: &str = "403";
+#[allow(dead_code)]
+pub const ERR_PEER_OFFLINE: &str = "404";
+pub const ERR_MESSAGE_TOO_LONG: &str = "405";
+#[allow(dead_code)]
+pub const ERR_CHANNEL_REQUIRED: &str = "406";
+#[allow(dead_code)]
+pub const ERR_INTERNAL_ERROR: &str = "500";
+
+const MAX_MESSAGE_LENGTH: usize = 1950;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoyoteMessage {
+    #[serde(rename = "type")]
+    pub msg_type: serde_json::Value,
+    pub client_id: String,
+    pub target_id: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParseError {
+    pub code: &'static str,
+}
+
+pub fn parse_message(data: &str) -> Result<CoyoteMessage, ParseError> {
+    if data.len() > MAX_MESSAGE_LENGTH {
+        return Err(ParseError {
+            code: ERR_MESSAGE_TOO_LONG,
+        });
+    }
+
+    let obj: serde_json::Value = serde_json::from_str(data).map_err(|_| ParseError {
+        code: ERR_INVALID_JSON,
+    })?;
+
+    let map = obj.as_object().ok_or(ParseError {
+        code: ERR_INVALID_JSON,
+    })?;
+
+    let msg_type = map
+        .get("type")
+        .filter(|v| !v.is_null() && v.as_str().is_none_or(|s| !s.is_empty()));
+    let client_id = map
+        .get("clientId")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
+    let target_id = map
+        .get("targetId")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
+    let message = map
+        .get("message")
+        .filter(|v| !v.is_null() && v.as_str().is_none_or(|s| !s.is_empty()));
+
+    if msg_type.is_none() || client_id.is_none() || target_id.is_none() || message.is_none() {
+        return Err(ParseError {
+            code: ERR_INVALID_JSON,
+        });
+    }
+
+    Ok(CoyoteMessage {
+        msg_type: msg_type.unwrap().clone(),
+        client_id: client_id.unwrap().to_string(),
+        target_id: target_id.unwrap().to_string(),
+        message: match message.unwrap() {
+            serde_json::Value::String(s) => s.clone(),
+            other => other.to_string(),
+        },
+    })
+}
+
+pub fn build_message(msg_type: &str, client_id: &str, target_id: &str, message: &str) -> String {
+    serde_json::json!({
+        "type": msg_type,
+        "clientId": client_id,
+        "targetId": target_id,
+        "message": message,
+    })
+    .to_string()
+}
+
+#[derive(Debug, Clone)]
+pub struct StrengthFeedback {
+    pub a: u8,
+    pub b: u8,
+    pub limit_a: u8,
+    pub limit_b: u8,
+}
+
+pub fn parse_strength_feedback(message: &str) -> Option<StrengthFeedback> {
+    let re = regex_lite::Regex::new(r"^strength-(\d+)\+(\d+)\+(\d+)\+(\d+)$").ok()?;
+    let caps = re.captures(message)?;
+    Some(StrengthFeedback {
+        a: caps[1].parse().ok()?,
+        b: caps[2].parse().ok()?,
+        limit_a: caps[3].parse().ok()?,
+        limit_b: caps[4].parse().ok()?,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_message_valid() {
+        let data = r#"{"type":"bind","clientId":"abc","targetId":"def","message":"hello"}"#;
+        let msg = parse_message(data).unwrap();
+        assert_eq!(msg.client_id, "abc");
+        assert_eq!(msg.target_id, "def");
+        assert_eq!(msg.message, "hello");
+    }
+
+    #[test]
+    fn test_parse_message_too_long() {
+        let long_data = format!(
+            r#"{{"type":"msg","clientId":"a","targetId":"b","message":"{}"}}"#,
+            "x".repeat(2000)
+        );
+        assert!(parse_message(&long_data).is_err());
+    }
+
+    #[test]
+    fn test_parse_message_invalid_json() {
+        assert!(parse_message("not json").is_err());
+    }
+
+    #[test]
+    fn test_parse_message_missing_fields() {
+        let data = r#"{"type":"bind"}"#;
+        let result = parse_message(data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_build_message() {
+        let msg = build_message("bind", "abc", "def", "200");
+        let parsed: serde_json::Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["type"], "bind");
+        assert_eq!(parsed["clientId"], "abc");
+        assert_eq!(parsed["targetId"], "def");
+        assert_eq!(parsed["message"], "200");
+    }
+
+    #[test]
+    fn test_parse_strength_feedback() {
+        let fb = parse_strength_feedback("strength-10+20+80+90").unwrap();
+        assert_eq!(fb.a, 10);
+        assert_eq!(fb.b, 20);
+        assert_eq!(fb.limit_a, 80);
+        assert_eq!(fb.limit_b, 90);
+    }
+
+    #[test]
+    fn test_parse_strength_feedback_invalid() {
+        assert!(parse_strength_feedback("invalid").is_none());
+        assert!(parse_strength_feedback("strength-10+20").is_none());
+    }
+}
