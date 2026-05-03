@@ -1,9 +1,9 @@
 [package]
 name = "bilive-coyote"
-version = "1.0.0"
+version = "0.1.0"
 edition = "2021"
 description = "Bilibili live gift to DG-LAB Coyote strength LAN bridge"
-license = "MIT"
+license = "Parity-7.0.0"
 
 [dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time", "net", "fs"] }
