@@ -1,3 +1,5 @@
+use tokio::sync::oneshot;
+
 use crate::bilibili::{BilibiliCommand, BilibiliHandle, BilibiliStart};
 use crate::config::{validate_bilibili_start, validate_manual_strength, ConfigStore};
 use crate::coyote::{generate_qr_data_url, CoyoteHandle};
@@ -61,12 +63,18 @@ pub async fn bilibili_start(
     };
     let input = validate_bilibili_start(&body, default_source)?;
     let start = BilibiliStart::from(input);
+    let (tx, rx) = oneshot::channel();
     state
         .bilibili
         .cmd_tx
-        .send(BilibiliCommand::Start(start))
+        .send(BilibiliCommand::Start(start, tx))
         .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?;
+        .map_err(|_| ApiError::Internal("Bilibili manager has stopped".into()))?;
+
+    rx.await
+        .map_err(|_| ApiError::Internal("Bilibili manager did not respond".into()))?
+        .map_err(|e| ApiError::Validation(e))?;
+
     Ok(Json(SuccessResponse { success: true }))
 }
 

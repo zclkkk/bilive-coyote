@@ -10,7 +10,7 @@ use crate::config::{BilibiliStartInput, ConfigStore, RuntimeStateStore};
 use crate::engine::types::BilibiliStatus;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::{mpsc, watch, Mutex};
+use tokio::sync::{mpsc, oneshot, watch, Mutex};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BilibiliStart {
@@ -46,9 +46,9 @@ impl From<BilibiliStartInput> for BilibiliStart {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum BilibiliCommand {
-    Start(BilibiliStart),
+    Start(BilibiliStart, oneshot::Sender<Result<(), String>>),
     Stop,
 }
 
@@ -117,8 +117,8 @@ impl BilibiliManager {
             tokio::select! {
                 cmd = self.cmd_rx.recv() => {
                     match cmd {
-                        Some(BilibiliCommand::Start(start)) => {
-                            self.handle_start(start).await;
+                        Some(BilibiliCommand::Start(start, reply)) => {
+                            self.handle_start(start, reply).await;
                         }
                         Some(BilibiliCommand::Stop) => {
                             self.handle_stop().await;
@@ -140,7 +140,7 @@ impl BilibiliManager {
         }
     }
 
-    async fn handle_start(&mut self, start: BilibiliStart) {
+    async fn handle_start(&mut self, start: BilibiliStart, reply: oneshot::Sender<Result<(), String>>) {
         self.handle_stop().await;
 
         let result = match start {
@@ -173,10 +173,17 @@ impl BilibiliManager {
             }
         };
 
-        if let Err(e) = result {
-            self.current_status.error = Some(e.clone());
-            let _ = self.status_tx.send(self.current_status.clone());
+        match &result {
+            Ok(()) => {
+                let _ = self.status_tx.send(self.current_status.clone());
+            }
+            Err(e) => {
+                self.current_status.error = Some(e.clone());
+                let _ = self.status_tx.send(self.current_status.clone());
+            }
         }
+
+        let _ = reply.send(result.map_err(|e| e.to_string()));
     }
 
     async fn handle_stop(&mut self) {
