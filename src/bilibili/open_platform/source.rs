@@ -1,6 +1,7 @@
 use crate::bilibili::live_socket::{run_live_socket, LiveSocketOptions, LiveSocketStatus};
 use crate::bilibili::open_platform::parser::parse_open_platform_gift;
 use crate::bilibili::open_platform::signer::sign_open_platform_request;
+use crate::bilibili::SourceStartResult;
 use crate::config::types::GiftEvent;
 use crate::config::{ConfigHandle, RuntimeStateStore};
 use serde::Deserialize;
@@ -50,7 +51,6 @@ pub struct OpenPlatformSource {
     config: ConfigHandle,
     state: Arc<Mutex<RuntimeStateStore>>,
     gift_tx: mpsc::Sender<GiftEvent>,
-    status_tx: mpsc::Sender<LiveSocketStatus>,
     credentials: Arc<Mutex<(String, String)>>,
     app_id: Arc<Mutex<u64>>,
     game_id: Arc<Mutex<Option<String>>>,
@@ -62,13 +62,11 @@ impl OpenPlatformSource {
         config: ConfigHandle,
         state: Arc<Mutex<RuntimeStateStore>>,
         gift_tx: mpsc::Sender<GiftEvent>,
-        status_tx: mpsc::Sender<LiveSocketStatus>,
     ) -> Self {
         Self {
             config,
             state,
             gift_tx,
-            status_tx,
             credentials: Arc::new(Mutex::new((String::new(), String::new()))),
             app_id: Arc::new(Mutex::new(0)),
             game_id: Arc::new(Mutex::new(None)),
@@ -92,7 +90,7 @@ impl OpenPlatformSource {
         app_secret: Option<String>,
         code: Option<String>,
         app_id: Option<u64>,
-    ) -> Result<(), String> {
+    ) -> Result<SourceStartResult, String> {
         let cancel = self.reset_cancel();
 
         let cfg = self.config.lock().await;
@@ -138,9 +136,7 @@ impl OpenPlatformSource {
             serde_json::from_value(data_val).map_err(|e| format!("parse start data: {e}"))?;
 
         self.handle_start_success(data, &app_key, &app_secret, &code, app_id, cancel)
-            .await?;
-
-        Ok(())
+            .await
     }
 
     pub async fn stop(&self) {
@@ -225,7 +221,7 @@ impl OpenPlatformSource {
         code: &str,
         app_id: u64,
         cancel: tokio_util::sync::CancellationToken,
-    ) -> Result<(), String> {
+    ) -> Result<SourceStartResult, String> {
         let auth: AuthBody = serde_json::from_str(&data.websocket_info.auth_body)
             .map_err(|e| format!("auth_body 格式错误: {e}"))?;
 
@@ -257,7 +253,6 @@ impl OpenPlatformSource {
 
         let game_id_for_hb = data.game_info.game_id.clone();
         let gift_tx = self.gift_tx.clone();
-        let status_tx = self.status_tx.clone();
         let room_id = auth.roomid;
 
         let auth_value = serde_json::json!({
@@ -269,7 +264,7 @@ impl OpenPlatformSource {
         });
 
         let (msg_tx, mut msg_rx) = mpsc::channel::<serde_json::Value>(256);
-        let (inner_status_tx, mut inner_status_rx) = mpsc::channel::<LiveSocketStatus>(16);
+        let (inner_status_tx, inner_status_rx) = mpsc::channel::<LiveSocketStatus>(16);
 
         let ls_cancel = cancel.clone();
         tokio::spawn(async move {
@@ -293,13 +288,6 @@ impl OpenPlatformSource {
                 if let Some(gift) = parse_open_platform_gift(&msg) {
                     let _ = gift_tx_h.send(gift).await;
                 }
-            }
-        });
-
-        let status_tx_h = status_tx.clone();
-        tokio::spawn(async move {
-            while let Some(status) = inner_status_rx.recv().await {
-                let _ = status_tx_h.send(status).await;
             }
         });
 
@@ -334,6 +322,8 @@ impl OpenPlatformSource {
             data.game_info.game_id, auth.roomid
         );
 
-        Ok(())
+        Ok(SourceStartResult {
+            status_rx: inner_status_rx,
+        })
     }
 }

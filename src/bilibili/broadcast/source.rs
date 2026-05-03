@@ -1,6 +1,7 @@
 use crate::bilibili::broadcast::parser::parse_broadcast_gift;
 use crate::bilibili::broadcast::wbi::fetch_danmu_info;
 use crate::bilibili::live_socket::{run_live_socket, LiveSocketOptions, LiveSocketStatus};
+use crate::bilibili::SourceStartResult;
 use crate::config::types::GiftEvent;
 use crate::config::ConfigHandle;
 use std::sync::Arc;
@@ -10,7 +11,6 @@ use tracing::info;
 pub struct BroadcastSource {
     config: ConfigHandle,
     gift_tx: mpsc::Sender<GiftEvent>,
-    status_tx: mpsc::Sender<LiveSocketStatus>,
     cancel: Arc<std::sync::Mutex<tokio_util::sync::CancellationToken>>,
 }
 
@@ -18,12 +18,10 @@ impl BroadcastSource {
     pub fn new(
         config: ConfigHandle,
         gift_tx: mpsc::Sender<GiftEvent>,
-        status_tx: mpsc::Sender<LiveSocketStatus>,
     ) -> Self {
         Self {
             config,
             gift_tx,
-            status_tx,
             cancel: Arc::new(std::sync::Mutex::new(
                 tokio_util::sync::CancellationToken::new(),
             )),
@@ -38,7 +36,7 @@ impl BroadcastSource {
         new
     }
 
-    pub async fn start(&self, room_id: Option<u64>) -> Result<(), String> {
+    pub async fn start(&self, room_id: Option<u64>) -> Result<SourceStartResult, String> {
         let cancel = self.reset_cancel();
 
         let cfg = self.config.lock().await;
@@ -52,7 +50,6 @@ impl BroadcastSource {
         let (key, urls, long_room_id) = fetch_danmu_info(requested).await?;
 
         let gift_tx = self.gift_tx.clone();
-        let status_tx = self.status_tx.clone();
 
         let auth = serde_json::json!({
             "uid": 0,
@@ -64,7 +61,7 @@ impl BroadcastSource {
         });
 
         let (msg_tx, mut msg_rx) = mpsc::channel::<serde_json::Value>(256);
-        let (inner_status_tx, mut inner_status_rx) = mpsc::channel::<LiveSocketStatus>(16);
+        let (inner_status_tx, inner_status_rx) = mpsc::channel::<LiveSocketStatus>(16);
 
         let ls_cancel = cancel.clone();
         tokio::spawn(async move {
@@ -91,13 +88,6 @@ impl BroadcastSource {
             }
         });
 
-        let status_tx_h = status_tx.clone();
-        tokio::spawn(async move {
-            while let Some(status) = inner_status_rx.recv().await {
-                let _ = status_tx_h.send(status).await;
-            }
-        });
-
         self.config
             .lock()
             .await
@@ -112,7 +102,9 @@ impl BroadcastSource {
 
         info!("[Bilibili/Broadcast] Started! Room: {long_room_id}");
 
-        Ok(())
+        Ok(SourceStartResult {
+            status_rx: inner_status_rx,
+        })
     }
 
     pub async fn stop(&self) {

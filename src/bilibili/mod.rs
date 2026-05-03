@@ -46,6 +46,10 @@ impl From<BilibiliStartInput> for BilibiliStart {
     }
 }
 
+pub struct SourceStartResult {
+    pub status_rx: mpsc::Receiver<LiveSocketStatus>,
+}
+
 #[derive(Debug)]
 pub enum BilibiliCommand {
     Start(BilibiliStart, oneshot::Sender<Result<(), String>>),
@@ -83,15 +87,9 @@ impl BilibiliManager {
         };
         let (status_tx, status_rx) = watch::channel(initial_status.clone());
 
-        let (live_status_tx, live_status_rx) = mpsc::channel::<LiveSocketStatus>(16);
-
-        let open_platform = OpenPlatformSource::new(
-            config.clone(),
-            state.clone(),
-            gift_tx.clone(),
-            live_status_tx.clone(),
-        );
-        let broadcast = BroadcastSource::new(config.clone(), gift_tx.clone(), live_status_tx);
+        let open_platform =
+            OpenPlatformSource::new(config.clone(), state.clone(), gift_tx.clone());
+        let broadcast = BroadcastSource::new(config.clone(), gift_tx.clone());
 
         let manager = Self {
             cmd_rx,
@@ -99,7 +97,7 @@ impl BilibiliManager {
             current_status: initial_status,
             open_platform,
             broadcast,
-            live_status_rx: Some(live_status_rx),
+            live_status_rx: None,
         };
 
         let handle = BilibiliHandle {
@@ -111,8 +109,6 @@ impl BilibiliManager {
     }
 
     pub async fn run(mut self) {
-        let mut live_status_rx = self.live_status_rx.take().unwrap();
-
         loop {
             tokio::select! {
                 cmd = self.cmd_rx.recv() => {
@@ -126,7 +122,12 @@ impl BilibiliManager {
                         None => break,
                     }
                 }
-                status = live_status_rx.recv() => {
+                status = async {
+                    match self.live_status_rx.as_mut() {
+                        Some(rx) => rx.recv().await,
+                        None => std::future::pending().await,
+                    }
+                } => {
                     if let Some(s) = status {
                         self.current_status.connected = s.connected;
                         self.current_status.error = s.error;
@@ -173,17 +174,18 @@ impl BilibiliManager {
             }
         };
 
-        match &result {
-            Ok(()) => {
+        match result {
+            Ok(source_result) => {
+                self.live_status_rx = Some(source_result.status_rx);
                 let _ = self.status_tx.send(self.current_status.clone());
+                let _ = reply.send(Ok(()));
             }
             Err(e) => {
                 self.current_status.error = Some(e.clone());
                 let _ = self.status_tx.send(self.current_status.clone());
+                let _ = reply.send(Err(e));
             }
         }
-
-        let _ = reply.send(result.map_err(|e| e.to_string()));
     }
 
     async fn handle_stop(&mut self) {
@@ -195,6 +197,7 @@ impl BilibiliManager {
                 self.broadcast.stop().await;
             }
         }
+        self.live_status_rx = None;
         self.current_status = BilibiliStatus {
             source: self.current_status.source,
             connected: false,
