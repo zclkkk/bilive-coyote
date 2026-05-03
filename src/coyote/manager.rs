@@ -47,10 +47,14 @@ pub struct CoyoteHandle {
     pub server_state: Arc<CoyoteServerState>,
 }
 
+struct PairedApp {
+    client_id: String,
+    tx: mpsc::Sender<String>,
+    close_tx: watch::Sender<bool>,
+}
+
 struct CoyoteSharedState {
-    app_client_id: std::sync::Mutex<Option<String>>,
-    app_tx: std::sync::Mutex<Option<mpsc::Sender<String>>>,
-    close_tx: std::sync::Mutex<Option<watch::Sender<bool>>>,
+    paired: std::sync::Mutex<Option<PairedApp>>,
 }
 
 pub struct CoyoteSharedHandle {
@@ -66,31 +70,33 @@ impl CoyoteSharedHandle {
         tx: mpsc::Sender<String>,
         close_tx: watch::Sender<bool>,
     ) -> Option<mpsc::Sender<String>> {
-        if let Some(old_close_tx) = self.shared.close_tx.lock().unwrap().take() {
-            let _ = old_close_tx.send(true);
-        }
-        *self.shared.close_tx.lock().unwrap() = Some(close_tx);
-
-        let old = self.shared.app_tx.lock().unwrap().take();
-        *self.shared.app_client_id.lock().unwrap() = Some(client_id);
-        *self.shared.app_tx.lock().unwrap() = Some(tx);
-        let status = CoyoteStatus {
-            paired: true,
-            strength_a: 0,
-            strength_b: 0,
-            limit_a: 200,
-            limit_b: 200,
+        let new = PairedApp {
+            client_id,
+            tx,
+            close_tx,
         };
-        let _ = self.status_tx.send(status);
-        old
+        let old = self.shared.paired.lock().unwrap().replace(new);
+        if let Some(prev) = old.as_ref() {
+            let _ = prev.close_tx.send(true);
+        }
+        let _ = self.status_tx.send(CoyoteStatus {
+            paired: true,
+            ..CoyoteStatus::default()
+        });
+        old.map(|p| p.tx)
     }
 
     pub fn is_paired_app(&self, client_id: &str) -> bool {
-        self.shared.app_client_id.lock().unwrap().as_deref() == Some(client_id)
+        self.shared
+            .paired
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|p| p.client_id == client_id)
     }
 
-    pub fn bridge_id_matches(&self, id: &str) -> bool {
-        self.bridge_id == id
+    pub fn bridge_id(&self) -> &str {
+        &self.bridge_id
     }
 
     pub fn handle_app_message(&self, message: &str) {
@@ -107,12 +113,12 @@ impl CoyoteSharedHandle {
     }
 
     pub fn disconnect_app(&self, client_id: &str) {
-        if !self.is_paired_app(client_id) {
-            return;
+        let mut guard = self.shared.paired.lock().unwrap();
+        if guard.as_ref().is_some_and(|p| p.client_id == client_id) {
+            *guard = None;
+            drop(guard);
+            let _ = self.status_tx.send(CoyoteStatus::default());
         }
-        *self.shared.app_client_id.lock().unwrap() = None;
-        *self.shared.app_tx.lock().unwrap() = None;
-        let _ = self.status_tx.send(CoyoteStatus::default());
     }
 }
 
@@ -129,9 +135,7 @@ impl CoyoteManager {
         let (status_tx, status_rx) = watch::channel(CoyoteStatus::default());
 
         let shared = Arc::new(CoyoteSharedState {
-            app_client_id: std::sync::Mutex::new(None),
-            app_tx: std::sync::Mutex::new(None),
-            close_tx: std::sync::Mutex::new(None),
+            paired: std::sync::Mutex::new(None),
         });
 
         let shared_handle = Arc::new(CoyoteSharedHandle {
@@ -203,28 +207,27 @@ impl CoyoteManager {
     }
 
     async fn send_heartbeat(&self) {
-        let tx = self.shared.app_tx.lock().unwrap().clone();
-        if let Some(tx) = tx {
-            let app_id = self.shared.app_client_id.lock().unwrap().clone();
-            if let Some(app_id) = app_id {
-                let msg = build_message("heartbeat", &app_id, &self.bridge_id, ERR_SUCCESS);
-                let _ = tx.send(msg).await;
-            }
-        }
+        let Some((tx, app_id)) = self.snapshot_paired() else {
+            return;
+        };
+        let msg = build_message("heartbeat", &app_id, &self.bridge_id, ERR_SUCCESS);
+        let _ = tx.send(msg).await;
     }
 
     async fn send_app_command(&self, command: &str) {
-        let app_id = self.shared.app_client_id.lock().unwrap().clone();
-        if let Some(app_id) = app_id {
-            let msg = build_message("msg", &self.bridge_id, &app_id, command);
-            self.send_app_command_raw(&msg).await;
-        }
+        let Some((tx, app_id)) = self.snapshot_paired() else {
+            return;
+        };
+        let msg = build_message("msg", &self.bridge_id, &app_id, command);
+        let _ = tx.send(msg).await;
     }
 
-    async fn send_app_command_raw(&self, msg: &str) {
-        let tx = self.shared.app_tx.lock().unwrap().clone();
-        if let Some(tx) = tx {
-            let _ = tx.send(msg.to_string()).await;
-        }
+    fn snapshot_paired(&self) -> Option<(mpsc::Sender<String>, String)> {
+        self.shared
+            .paired
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|p| (p.tx.clone(), p.client_id.clone()))
     }
 }

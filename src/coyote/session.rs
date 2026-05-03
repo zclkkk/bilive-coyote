@@ -72,7 +72,7 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
             continue;
         }
 
-        if !state.shared.bridge_id_matches(&coyote_msg.client_id) {
+        if coyote_msg.client_id != state.shared.bridge_id() {
             let resp = build_message(
                 "bind",
                 &coyote_msg.client_id,
@@ -117,7 +117,7 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
                         match parsed {
                             Ok(coyote_msg) => {
                                 let is_paired = state.shared.is_paired_app(&client_id)
-                                    && state.shared.bridge_id_matches(&coyote_msg.client_id)
+                                    && coyote_msg.client_id == state.shared.bridge_id()
                                     && coyote_msg.target_id == client_id;
 
                                 if !is_paired {
