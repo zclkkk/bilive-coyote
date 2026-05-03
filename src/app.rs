@@ -41,7 +41,8 @@ impl App {
 
         let (strength_engine, strength_handle) = StrengthEngine::new(
             cfg_snapshot.rules.clone(),
-            (cfg_snapshot.safety.limit_a, cfg_snapshot.safety.limit_b),
+            cfg_snapshot.safety.limit_a,
+            cfg_snapshot.safety.limit_b,
             cfg_snapshot.safety.decay_enabled,
             cfg_snapshot.safety.decay_rate,
             coyote_handle.cmd_tx.clone(),

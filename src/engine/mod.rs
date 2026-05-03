@@ -4,9 +4,36 @@ pub mod types;
 use crate::config::types::{Channel, GiftEvent, GiftRule};
 use crate::coyote::CoyoteCommand;
 use crate::engine::gift_mapper::{apply_rule, build_gift_log, match_rule};
-use crate::engine::types::*;
-use std::collections::HashMap;
+use crate::engine::types::{PanelEvent, StrengthSource, StrengthStatus};
 use tokio::sync::{mpsc, watch};
+
+#[derive(Debug, Clone, Default)]
+struct ChannelPair<T> {
+    a: T,
+    b: T,
+}
+
+impl<T> ChannelPair<T> {
+    fn get(&self, ch: Channel) -> &T {
+        match ch {
+            Channel::A => &self.a,
+            Channel::B => &self.b,
+        }
+    }
+
+    fn get_mut(&mut self, ch: Channel) -> &mut T {
+        match ch {
+            Channel::A => &mut self.a,
+            Channel::B => &mut self.b,
+        }
+    }
+}
+
+impl<T: Copy> ChannelPair<T> {
+    fn splat(value: T) -> Self {
+        Self { a: value, b: value }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum StrengthCommand {
@@ -32,7 +59,7 @@ pub enum StrengthCommand {
     RulesUpdate(Vec<GiftRule>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct StrengthEntry {
     value: u8,
     baseline: u8,
@@ -45,16 +72,6 @@ struct Expiry {
     delta: u8,
 }
 
-impl StrengthEntry {
-    fn new() -> Self {
-        Self {
-            value: 0,
-            baseline: 0,
-            expiries: Vec::new(),
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct StrengthHandle {
     pub cmd_tx: mpsc::Sender<StrengthCommand>,
@@ -63,9 +80,9 @@ pub struct StrengthHandle {
 }
 
 pub struct StrengthEngine {
-    channels: HashMap<Channel, StrengthEntry>,
-    app_limits: (u8, u8),
-    config_limits: (u8, u8),
+    channels: ChannelPair<StrengthEntry>,
+    app_limits: ChannelPair<u8>,
+    config_limits: ChannelPair<u8>,
     decay_enabled: bool,
     decay_rate: u8,
     rules: Vec<GiftRule>,
@@ -78,30 +95,31 @@ pub struct StrengthEngine {
 impl StrengthEngine {
     pub fn new(
         rules: Vec<GiftRule>,
-        config_limits: (u8, u8),
+        limit_a: u8,
+        limit_b: u8,
         decay_enabled: bool,
         decay_rate: u8,
         coyote_cmd_tx: mpsc::Sender<CoyoteCommand>,
     ) -> (Self, StrengthHandle) {
         let (cmd_tx, cmd_rx) = mpsc::channel(64);
+        let config_limits = ChannelPair {
+            a: limit_a,
+            b: limit_b,
+        };
         let initial = StrengthStatus {
             a: 0,
             b: 0,
             app_limit_a: 200,
             app_limit_b: 200,
-            effective_limit_a: config_limits.0,
-            effective_limit_b: config_limits.1,
+            effective_limit_a: limit_a,
+            effective_limit_b: limit_b,
         };
         let (status_tx, status_rx) = watch::channel(initial);
         let (panel_tx, _) = tokio::sync::broadcast::channel(256);
 
-        let mut channels = HashMap::new();
-        channels.insert(Channel::A, StrengthEntry::new());
-        channels.insert(Channel::B, StrengthEntry::new());
-
         let engine = Self {
-            channels,
-            app_limits: (200, 200),
+            channels: ChannelPair::default(),
+            app_limits: ChannelPair::splat(200),
             config_limits,
             decay_enabled,
             decay_rate,
@@ -142,10 +160,10 @@ impl StrengthEngine {
                             self.handle_coyote_feedback(strength_a, strength_b, limit_a, limit_b).await;
                         }
                         Some(StrengthCommand::CoyoteDisconnected) => {
-                            self.handle_coyote_disconnect().await;
+                            self.handle_coyote_disconnect();
                         }
                         Some(StrengthCommand::ConfigUpdate { limit_a, limit_b, decay_enabled, decay_rate }) => {
-                            self.config_limits = (limit_a, limit_b);
+                            self.config_limits = ChannelPair { a: limit_a, b: limit_b };
                             self.decay_enabled = decay_enabled;
                             self.decay_rate = decay_rate;
                             self.enforce_limits().await;
@@ -164,15 +182,7 @@ impl StrengthEngine {
     }
 
     fn effective_limit(&self, channel: Channel) -> u8 {
-        let config_limit = match channel {
-            Channel::A => self.config_limits.0,
-            Channel::B => self.config_limits.1,
-        };
-        let app_limit = match channel {
-            Channel::A => self.app_limits.0,
-            Channel::B => self.app_limits.1,
-        };
-        config_limit.min(app_limit)
+        (*self.config_limits.get(channel)).min(*self.app_limits.get(channel))
     }
 
     async fn handle_gift(&mut self, gift: GiftEvent) {
@@ -182,21 +192,20 @@ impl StrengthEngine {
             for event in events {
                 let ch = event.channel;
                 let limit = self.effective_limit(ch);
-                let entry = self.channels.get_mut(&ch).unwrap();
+                let entry = self.channels.get_mut(ch);
                 let new_value = (entry.value as i32)
                     .saturating_add(event.delta)
                     .clamp(0, limit as i32) as u8;
-                let actual_delta = new_value as i32 - entry.value as i32;
+                let actual_delta = new_value - entry.value;
                 if actual_delta > 0 {
                     entry.value = new_value;
                     entry.expiries.push(Expiry {
                         until: std::time::Instant::now()
                             + std::time::Duration::from_secs(event.duration.unwrap_or(0)),
-                        delta: actual_delta as u8,
+                        delta: actual_delta,
                     });
-                    let val = entry.value;
-                    self.send_coyote_strength(ch, val).await;
-                    self.emit_strength_event(ch, val, StrengthSource::Gift)
+                    self.send_coyote_strength(ch, new_value).await;
+                    self.emit_strength_event(ch, new_value, StrengthSource::Gift)
                         .await;
                 }
             }
@@ -215,7 +224,7 @@ impl StrengthEngine {
     async fn handle_manual(&mut self, channel: Channel, value: u8) {
         let limit = self.effective_limit(channel);
         let value = value.min(limit);
-        let entry = self.channels.get_mut(&channel).unwrap();
+        let entry = self.channels.get_mut(channel);
         entry.value = value;
         entry.baseline = value;
         entry.expiries.clear();
@@ -226,7 +235,7 @@ impl StrengthEngine {
 
     async fn handle_emergency(&mut self) {
         for ch in [Channel::A, Channel::B] {
-            let entry = self.channels.get_mut(&ch).unwrap();
+            let entry = self.channels.get_mut(ch);
             entry.value = 0;
             entry.baseline = 0;
             entry.expiries.clear();
@@ -254,27 +263,27 @@ impl StrengthEngine {
         limit_a: u8,
         limit_b: u8,
     ) {
-        self.app_limits = (limit_a, limit_b);
+        self.app_limits = ChannelPair { a: limit_a, b: limit_b };
         self.apply_channel_feedback(Channel::A, strength_a).await;
         self.apply_channel_feedback(Channel::B, strength_b).await;
         self.emit_status();
     }
 
-    async fn handle_coyote_disconnect(&mut self) {
+    fn handle_coyote_disconnect(&mut self) {
         for ch in [Channel::A, Channel::B] {
-            let entry = self.channels.get_mut(&ch).unwrap();
+            let entry = self.channels.get_mut(ch);
             entry.value = 0;
             entry.baseline = 0;
             entry.expiries.clear();
         }
-        self.app_limits = (200, 200);
+        self.app_limits = ChannelPair::splat(200);
         self.emit_status();
     }
 
     async fn apply_channel_feedback(&mut self, channel: Channel, app_value: u8) {
         let limit = self.effective_limit(channel);
         let value = app_value.min(limit);
-        let entry = self.channels.get_mut(&channel).unwrap();
+        let entry = self.channels.get_mut(channel);
 
         if entry.value != value {
             entry.value = value;
@@ -294,35 +303,35 @@ impl StrengthEngine {
 
         let now = std::time::Instant::now();
         for ch in [Channel::A, Channel::B] {
-            let entry = self.channels.get_mut(&ch).unwrap();
-            entry.expiries.retain(|exp| exp.until > now);
-
-            let active_delta: u8 = entry.expiries.iter().map(|exp| exp.delta).sum::<u8>();
-            let floor = (entry.baseline as u16 + active_delta as u16).min(255) as u8;
-
-            if entry.value > floor {
-                let decay_delta = (entry.value - floor).min(self.decay_rate);
-                if decay_delta > 0 {
-                    entry.value -= decay_delta;
-                    let val = entry.value;
-                    let _ = entry;
-                    self.send_coyote_strength(ch, val).await;
-                    self.emit_strength_event(ch, val, StrengthSource::Decay)
-                        .await;
+            let new_value = {
+                let entry = self.channels.get_mut(ch);
+                entry.expiries.retain(|exp| exp.until > now);
+                let active_delta: u8 = entry.expiries.iter().map(|exp| exp.delta).sum();
+                let floor = (entry.baseline as u16 + active_delta as u16).min(255) as u8;
+                if entry.value <= floor {
+                    continue;
                 }
-            }
+                let decay_delta = (entry.value - floor).min(self.decay_rate);
+                if decay_delta == 0 {
+                    continue;
+                }
+                entry.value -= decay_delta;
+                entry.value
+            };
+            self.send_coyote_strength(ch, new_value).await;
+            self.emit_strength_event(ch, new_value, StrengthSource::Decay)
+                .await;
         }
     }
 
     async fn enforce_limits(&mut self) {
         for ch in [Channel::A, Channel::B] {
             let limit = self.effective_limit(ch);
-            let entry = self.channels.get_mut(&ch).unwrap();
+            let entry = self.channels.get_mut(ch);
             if entry.value > limit {
                 entry.value = limit;
                 entry.baseline = limit;
                 entry.expiries.clear();
-                let _ = entry;
                 self.send_coyote_strength(ch, limit).await;
             }
         }
@@ -353,13 +362,11 @@ impl StrengthEngine {
     }
 
     fn emit_status(&self) {
-        let a = self.channels.get(&Channel::A).unwrap();
-        let b = self.channels.get(&Channel::B).unwrap();
         let status = StrengthStatus {
-            a: a.value,
-            b: b.value,
-            app_limit_a: self.app_limits.0,
-            app_limit_b: self.app_limits.1,
+            a: self.channels.get(Channel::A).value,
+            b: self.channels.get(Channel::B).value,
+            app_limit_a: self.app_limits.a,
+            app_limit_b: self.app_limits.b,
             effective_limit_a: self.effective_limit(Channel::A),
             effective_limit_b: self.effective_limit(Channel::B),
         };

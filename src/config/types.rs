@@ -15,7 +15,7 @@ pub enum RuleChannel {
     Both,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Channel {
     A,
     B,
