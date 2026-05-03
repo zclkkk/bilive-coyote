@@ -9,7 +9,6 @@ use crate::http::routes::AppState;
 use crate::panel::PanelHub;
 use axum::routing::get;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tracing::info;
 
 pub struct App {
@@ -28,12 +27,11 @@ impl App {
         let state = RuntimeStateStore::load_or_default(state_path);
 
         let config = ConfigHandle::new(config);
-        let state = Arc::new(Mutex::new(state));
 
         let (gift_tx, gift_rx) = tokio::sync::mpsc::channel::<GiftEvent>(256);
 
         let (bilibili_manager, bilibili_handle) =
-            BilibiliManager::new(config.clone(), state.clone(), gift_tx.clone());
+            BilibiliManager::new(config.clone(), state, gift_tx.clone());
 
         let (coyote_manager, coyote_handle) = CoyoteManager::new();
 

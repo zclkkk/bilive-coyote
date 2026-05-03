@@ -5,8 +5,8 @@ use crate::bilibili::SourceStartResult;
 use crate::config::types::GiftEvent;
 use crate::config::{ConfigHandle, RuntimeStateStore};
 use serde::Deserialize;
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 const BASE_URL: &str = "https://live-open.biliapi.com";
@@ -49,43 +49,39 @@ struct AuthBody {
 
 pub struct OpenPlatformSource {
     config: ConfigHandle,
-    state: Arc<Mutex<RuntimeStateStore>>,
+    state: RuntimeStateStore,
     gift_tx: mpsc::Sender<GiftEvent>,
-    credentials: Arc<Mutex<(String, String)>>,
-    app_id: Arc<Mutex<u64>>,
-    game_id: Arc<Mutex<Option<String>>>,
-    cancel: Arc<std::sync::Mutex<tokio_util::sync::CancellationToken>>,
+    app_id: u64,
+    game_id: Option<String>,
+    cancel: CancellationToken,
+    http: reqwest::Client,
 }
 
 impl OpenPlatformSource {
     pub fn new(
         config: ConfigHandle,
-        state: Arc<Mutex<RuntimeStateStore>>,
+        state: RuntimeStateStore,
         gift_tx: mpsc::Sender<GiftEvent>,
     ) -> Self {
         Self {
             config,
             state,
             gift_tx,
-            credentials: Arc::new(Mutex::new((String::new(), String::new()))),
-            app_id: Arc::new(Mutex::new(0)),
-            game_id: Arc::new(Mutex::new(None)),
-            cancel: Arc::new(std::sync::Mutex::new(
-                tokio_util::sync::CancellationToken::new(),
-            )),
+            app_id: 0,
+            game_id: None,
+            cancel: CancellationToken::new(),
+            http: reqwest::Client::new(),
         }
     }
 
-    fn reset_cancel(&self) -> tokio_util::sync::CancellationToken {
-        let mut guard = self.cancel.lock().unwrap();
-        guard.cancel();
-        let new = tokio_util::sync::CancellationToken::new();
-        *guard = new.clone();
-        new
+    fn reset_cancel(&mut self) -> CancellationToken {
+        self.cancel.cancel();
+        self.cancel = CancellationToken::new();
+        self.cancel.clone()
     }
 
     pub async fn start(
-        &self,
+        &mut self,
         app_key: Option<String>,
         app_secret: Option<String>,
         code: Option<String>,
@@ -105,13 +101,14 @@ impl OpenPlatformSource {
             return Err("code, appId, appKey and appSecret required".into());
         }
 
-        *self.credentials.lock().await = (app_key.clone(), app_secret.clone());
-        *self.app_id.lock().await = app_id;
+        self.app_id = app_id;
 
-        self.clear_stale_game(app_id).await;
+        self.clear_stale_game(&app_key, &app_secret, app_id).await;
 
         let resp = self
             .request(
+                &app_key,
+                &app_secret,
                 "/v2/app/start",
                 &serde_json::json!({"code": code, "app_id": app_id}),
             )
@@ -135,29 +132,34 @@ impl OpenPlatformSource {
         let data: StartData =
             serde_json::from_value(data_val).map_err(|e| format!("parse start data: {e}"))?;
 
-        self.handle_start_success(data, &app_key, &app_secret, &code, app_id, cancel)
+        self.handle_start_success(data, app_key, app_secret, code, app_id, cancel)
             .await
     }
 
-    pub async fn stop(&self) {
-        self.cancel.lock().unwrap().cancel();
-        let game_id = self.game_id.lock().await.take();
-        let app_id = *self.app_id.lock().await;
-        if let Some(gid) = game_id {
-            self.end_game(&gid, app_id).await;
+    pub async fn stop(&mut self) {
+        self.cancel.cancel();
+        if let Some(game_id) = self.game_id.take() {
+            // Use the credentials currently saved in config to end the session.
+            let cfg = self.config.lock().await;
+            let creds = &cfg.get().bilibili.open_platform;
+            let app_key = creds.app_key.clone();
+            let app_secret = creds.app_secret.clone();
+            drop(cfg);
+            self.end_game(&app_key, &app_secret, &game_id, self.app_id)
+                .await;
         }
     }
 
     async fn request(
         &self,
+        app_key: &str,
+        app_secret: &str,
         path: &str,
         params: &serde_json::Value,
     ) -> Result<OpenPlatformResponse, reqwest::Error> {
-        let (app_key, app_secret) = self.credentials.lock().await.clone();
-        let headers = sign_open_platform_request(params, &app_key, &app_secret);
+        let headers = sign_open_platform_request(params, app_key, app_secret);
 
-        let client = reqwest::Client::new();
-        let mut req = client.post(format!("{BASE_URL}{path}"));
+        let mut req = self.http.post(format!("{BASE_URL}{path}"));
         for (key, value) in headers {
             req = req.header(key, value);
         }
@@ -173,31 +175,27 @@ impl OpenPlatformSource {
         Ok(data)
     }
 
-    async fn clear_stale_game(&self, app_id: u64) {
-        let stale_id = self.state.lock().await.open_platform_game_id().to_string();
+    async fn clear_stale_game(&mut self, app_key: &str, app_secret: &str, app_id: u64) {
+        let stale_id = self.state.open_platform_game_id().to_string();
         if stale_id.is_empty() {
             return;
         }
         info!("[Bilibili/OpenPlatform] Cleaning stale game: {stale_id}");
-        self.end_game(&stale_id, app_id).await;
+        self.end_game(app_key, app_secret, &stale_id, app_id).await;
     }
 
-    async fn end_game(&self, game_id: &str, app_id: u64) {
+    async fn end_game(&mut self, app_key: &str, app_secret: &str, game_id: &str, app_id: u64) {
         match self
             .request(
+                app_key,
+                app_secret,
                 "/v2/app/end",
                 &serde_json::json!({"game_id": game_id, "app_id": app_id}),
             )
             .await
         {
             Ok(resp) if resp.code == 0 => {
-                if let Err(e) = self
-                    .state
-                    .lock()
-                    .await
-                    .set_open_platform_game_id(String::new())
-                    .await
-                {
+                if let Err(e) = self.state.set_open_platform_game_id(String::new()).await {
                     error!("[Bilibili/OpenPlatform] Failed to clear state: {e}");
                 }
             }
@@ -214,23 +212,21 @@ impl OpenPlatformSource {
     }
 
     async fn handle_start_success(
-        &self,
+        &mut self,
         data: StartData,
-        app_key: &str,
-        app_secret: &str,
-        code: &str,
+        app_key: String,
+        app_secret: String,
+        code: String,
         app_id: u64,
-        cancel: tokio_util::sync::CancellationToken,
+        cancel: CancellationToken,
     ) -> Result<SourceStartResult, String> {
         let auth: AuthBody = serde_json::from_str(&data.websocket_info.auth_body)
             .map_err(|e| format!("auth_body 格式错误: {e}"))?;
 
-        *self.game_id.lock().await = Some(data.game_info.game_id.clone());
+        self.game_id = Some(data.game_info.game_id.clone());
 
         if let Err(e) = self
             .state
-            .lock()
-            .await
             .set_open_platform_game_id(data.game_info.game_id.clone())
             .await
         {
@@ -288,31 +284,26 @@ impl OpenPlatformSource {
             .await;
         });
 
-        let gift_tx_h = gift_tx.clone();
         tokio::spawn(async move {
             while let Some(msg) = msg_rx.recv().await {
                 if let Some(gift) = parse_open_platform_gift(&msg) {
-                    let _ = gift_tx_h.send(gift).await;
+                    let _ = gift_tx.send(gift).await;
                 }
             }
         });
 
-        let hb_cancel = cancel.clone();
-        let hb_game_id = game_id_for_hb;
-        let hb_creds = self.credentials.clone();
+        let hb_http = self.http.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(20));
             interval.tick().await;
             loop {
-                if hb_cancel.is_cancelled() {
-                    break;
+                tokio::select! {
+                    _ = cancel.cancelled() => break,
+                    _ = interval.tick() => {}
                 }
-                interval.tick().await;
-                let (app_key, app_secret) = hb_creds.lock().await.clone();
-                let params = serde_json::json!({"game_id": &*hb_game_id});
+                let params = serde_json::json!({"game_id": &game_id_for_hb});
                 let headers = sign_open_platform_request(&params, &app_key, &app_secret);
-                let client = reqwest::Client::new();
-                let mut req = client.post(format!("{BASE_URL}/v2/app/heartbeat"));
+                let mut req = hb_http.post(format!("{BASE_URL}/v2/app/heartbeat"));
                 for (key, value) in headers {
                     req = req.header(key, value);
                 }

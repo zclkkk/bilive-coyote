@@ -4,14 +4,14 @@ use crate::bilibili::live_socket::{run_live_socket, LiveSocketOptions, LiveSocke
 use crate::bilibili::SourceStartResult;
 use crate::config::types::GiftEvent;
 use crate::config::ConfigHandle;
-use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 pub struct BroadcastSource {
     config: ConfigHandle,
     gift_tx: mpsc::Sender<GiftEvent>,
-    cancel: Arc<std::sync::Mutex<tokio_util::sync::CancellationToken>>,
+    cancel: CancellationToken,
 }
 
 impl BroadcastSource {
@@ -19,21 +19,17 @@ impl BroadcastSource {
         Self {
             config,
             gift_tx,
-            cancel: Arc::new(std::sync::Mutex::new(
-                tokio_util::sync::CancellationToken::new(),
-            )),
+            cancel: CancellationToken::new(),
         }
     }
 
-    fn reset_cancel(&self) -> tokio_util::sync::CancellationToken {
-        let mut guard = self.cancel.lock().unwrap();
-        guard.cancel();
-        let new = tokio_util::sync::CancellationToken::new();
-        *guard = new.clone();
-        new
+    fn reset_cancel(&mut self) -> CancellationToken {
+        self.cancel.cancel();
+        self.cancel = CancellationToken::new();
+        self.cancel.clone()
     }
 
-    pub async fn start(&self, room_id: Option<u64>) -> Result<SourceStartResult, String> {
+    pub async fn start(&mut self, room_id: Option<u64>) -> Result<SourceStartResult, String> {
         let cancel = self.reset_cancel();
 
         let cfg = self.config.lock().await;
@@ -109,7 +105,7 @@ impl BroadcastSource {
         })
     }
 
-    pub async fn stop(&self) {
-        self.cancel.lock().unwrap().cancel();
+    pub fn stop(&self) {
+        self.cancel.cancel();
     }
 }

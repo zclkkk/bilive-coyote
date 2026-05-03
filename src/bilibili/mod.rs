@@ -9,8 +9,7 @@ use crate::config::types::{BilibiliSourceType, GiftEvent};
 use crate::config::{BilibiliStartInput, ConfigHandle, RuntimeStateStore};
 use crate::engine::types::BilibiliStatus;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
+use tokio::sync::{mpsc, oneshot, watch};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BilibiliStart {
@@ -76,7 +75,7 @@ pub struct BilibiliManager {
 impl BilibiliManager {
     pub fn new(
         config: ConfigHandle,
-        state: Arc<Mutex<RuntimeStateStore>>,
+        state: RuntimeStateStore,
         gift_tx: mpsc::Sender<GiftEvent>,
     ) -> (Self, BilibiliHandle) {
         let (cmd_tx, cmd_rx) = mpsc::channel(32);
@@ -89,8 +88,8 @@ impl BilibiliManager {
         };
         let (status_tx, status_rx) = watch::channel(initial_status.clone());
 
-        let open_platform = OpenPlatformSource::new(config.clone(), state.clone(), gift_tx.clone());
-        let broadcast = BroadcastSource::new(config.clone(), gift_tx.clone());
+        let open_platform = OpenPlatformSource::new(config.clone(), state, gift_tx.clone());
+        let broadcast = BroadcastSource::new(config.clone(), gift_tx);
 
         let manager = Self {
             cmd_rx,
@@ -203,7 +202,7 @@ impl BilibiliManager {
                 self.open_platform.stop().await;
             }
             BilibiliSourceType::Broadcast => {
-                self.broadcast.stop().await;
+                self.broadcast.stop();
             }
         }
         self.live_status_rx = None;
