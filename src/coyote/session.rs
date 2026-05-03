@@ -45,7 +45,7 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
     while let Some(Ok(msg)) = ws_stream.next().await {
         let text = match msg {
             Message::Text(text) => text,
-            Message::Close(_) | _ => {
+            _ => {
                 sink_task.abort();
                 return;
             }
@@ -62,8 +62,12 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
         };
 
         if coyote_msg.msg_type.as_str() != Some("bind") {
-            let resp =
-                build_message("error", &coyote_msg.client_id, &coyote_msg.target_id, ERR_NOT_PAIRED);
+            let resp = build_message(
+                "error",
+                &coyote_msg.client_id,
+                &coyote_msg.target_id,
+                ERR_NOT_PAIRED,
+            );
             let _ = out_tx.try_send(resp);
             continue;
         }
@@ -89,8 +93,9 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
             continue;
         }
 
-        let old_tx =
-            state.shared.register_app(client_id.clone(), out_tx.clone(), close_tx);
+        let old_tx = state
+            .shared
+            .register_app(client_id.clone(), out_tx.clone(), close_tx);
         if let Some(old) = old_tx {
             let _ = old
                 .send(build_message("error", "", "", ERR_PEER_DISCONNECTED))

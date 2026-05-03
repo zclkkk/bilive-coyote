@@ -89,7 +89,9 @@ mod tests {
         let params = serde_json::json!({"code": "test", "app_id": 1});
         let headers = sign_open_platform_request(&params, "mykey", "mysecret");
 
-        let auth = headers.get("Authorization").expect("Authorization header missing");
+        let auth = headers
+            .get("Authorization")
+            .expect("Authorization header missing");
         assert!(!auth.is_empty(), "Authorization must not be empty");
 
         let ordered_keys = [
@@ -110,6 +112,9 @@ mod tests {
         let mut mac = HmacSha256::new_from_slice(b"mysecret").unwrap();
         mac.update(reconstructed.as_bytes());
         let expected = hex::encode(mac.finalize().into_bytes());
-        assert_eq!(auth, &expected, "Authorization must match reconstructed HMAC");
+        assert_eq!(
+            auth, &expected,
+            "Authorization must match reconstructed HMAC"
+        );
     }
 }

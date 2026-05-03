@@ -15,10 +15,7 @@ pub struct BroadcastSource {
 }
 
 impl BroadcastSource {
-    pub fn new(
-        config: ConfigHandle,
-        gift_tx: mpsc::Sender<GiftEvent>,
-    ) -> Self {
+    pub fn new(config: ConfigHandle, gift_tx: mpsc::Sender<GiftEvent>) -> Self {
         Self {
             config,
             gift_tx,

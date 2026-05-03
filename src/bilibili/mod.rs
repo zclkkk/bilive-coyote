@@ -89,8 +89,7 @@ impl BilibiliManager {
         };
         let (status_tx, status_rx) = watch::channel(initial_status.clone());
 
-        let open_platform =
-            OpenPlatformSource::new(config.clone(), state.clone(), gift_tx.clone());
+        let open_platform = OpenPlatformSource::new(config.clone(), state.clone(), gift_tx.clone());
         let broadcast = BroadcastSource::new(config.clone(), gift_tx.clone());
 
         let manager = Self {
@@ -143,7 +142,11 @@ impl BilibiliManager {
         }
     }
 
-    async fn handle_start(&mut self, start: BilibiliStart, reply: oneshot::Sender<Result<(), String>>) {
+    async fn handle_start(
+        &mut self,
+        start: BilibiliStart,
+        reply: oneshot::Sender<Result<(), String>>,
+    ) {
         self.handle_stop().await;
 
         let result = match start {

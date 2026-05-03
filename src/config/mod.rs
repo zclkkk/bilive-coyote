@@ -3,8 +3,8 @@ pub mod types;
 pub mod validation;
 
 use crate::config::types::AppConfig;
-pub use store::{ConfigError, ConfigStore, RuntimeStateStore};
 use std::sync::Arc;
+pub use store::{ConfigError, ConfigStore, RuntimeStateStore};
 use tokio::sync::watch;
 
 #[derive(Clone)]

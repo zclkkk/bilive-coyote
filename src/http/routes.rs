@@ -71,7 +71,7 @@ pub async fn bilibili_start(
 
     rx.await
         .map_err(|_| ApiError::Internal("Bilibili manager did not respond".into()))?
-        .map_err(|e| ApiError::Validation(e))?;
+        .map_err(ApiError::Validation)?;
 
     Ok(Json(SuccessResponse { success: true }))
 }
