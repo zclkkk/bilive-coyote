@@ -51,10 +51,6 @@ impl ConfigStore {
         &self.data
     }
 
-    pub fn subscribe(&self) -> watch::Receiver<AppConfig> {
-        self.tx.subscribe()
-    }
-
     pub fn sender(&self) -> watch::Sender<AppConfig> {
         self.tx.clone()
     }

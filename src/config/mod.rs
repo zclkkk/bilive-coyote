@@ -29,10 +29,6 @@ impl ConfigHandle {
     pub fn snapshot(&self) -> AppConfig {
         self.tx.borrow().clone()
     }
-
-    pub fn subscribe(&self) -> watch::Receiver<AppConfig> {
-        self.tx.subscribe()
-    }
 }
 
 pub use validation::{
