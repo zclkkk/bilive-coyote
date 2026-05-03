@@ -227,12 +227,15 @@ impl OpenPlatformSource {
 
         *self.game_id.lock().await = Some(data.game_info.game_id.clone());
 
-        self.state
+        if let Err(e) = self
+            .state
             .lock()
             .await
             .set_open_platform_game_id(data.game_info.game_id.clone())
             .await
-            .map_err(|e| format!("Failed to save state: {e}"))?;
+        {
+            warn!("[Bilibili/OpenPlatform] Failed to save state: {e}");
+        }
 
         if let Err(e) = self
             .config
