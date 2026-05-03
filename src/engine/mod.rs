@@ -183,8 +183,10 @@ impl StrengthEngine {
                 let ch = event.channel;
                 let limit = self.effective_limit(ch);
                 let entry = self.channels.get_mut(&ch).unwrap();
-                let new_value = (entry.value as u16 + event.delta as u16).min(limit as u16) as u8;
-                let actual_delta = new_value as i16 - entry.value as i16;
+                let new_value = (entry.value as i32)
+                    .saturating_add(event.delta)
+                    .clamp(0, limit as i32) as u8;
+                let actual_delta = new_value as i32 - entry.value as i32;
                 if actual_delta > 0 {
                     entry.value = new_value;
                     entry.expiries.push(Expiry {

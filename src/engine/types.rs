@@ -15,7 +15,7 @@ pub struct StrengthStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrengthChangeEvent {
     pub channel: Channel,
-    pub delta: i16,
+    pub delta: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub absolute: Option<u8>,
     pub source: StrengthSource,

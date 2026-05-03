@@ -22,13 +22,14 @@ pub fn apply_rule(rule: &GiftRule, gift: &GiftEvent) -> (Vec<StrengthChangeEvent
         RuleChannel::A => vec![Channel::A],
         RuleChannel::B => vec![Channel::B],
     };
-    let delta = rule.strength_add as i16 * gift.num as i16;
+    let raw_delta = (rule.strength_add as u64).saturating_mul(gift.num as u64);
+    let delta_i32 = i32::try_from(raw_delta).unwrap_or(i32::MAX);
 
     let events: Vec<StrengthChangeEvent> = channels
         .iter()
         .map(|&ch| StrengthChangeEvent {
             channel: ch,
-            delta,
+            delta: delta_i32,
             absolute: None,
             source: StrengthSource::Gift,
             gift_name: Some(gift.gift_name.clone()),
@@ -39,7 +40,7 @@ pub fn apply_rule(rule: &GiftRule, gift: &GiftEvent) -> (Vec<StrengthChangeEvent
 
     let delta_str = channels
         .iter()
-        .map(|ch| format!("{ch:?}+{delta}"))
+        .map(|ch| format!("{ch:?}+{raw_delta}"))
         .collect::<Vec<_>>()
         .join(" ");
 
