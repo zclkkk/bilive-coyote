@@ -155,13 +155,6 @@ async fn handle_connection(
                             auth_success = true;
                         }
                     }
-                    Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
-                        if let Ok(data) = hex::decode(&text) {
-                            if handle_data(&data, opts).await {
-                                auth_success = true;
-                            }
-                        }
-                    }
                     Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => {
                         break;
                     }

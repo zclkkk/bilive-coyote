@@ -214,7 +214,7 @@ impl StrengthEngine {
         let log = build_gift_log(&gift, strength_delta);
         let _ = self.panel_tx.send(PanelEvent {
             event_type: "gift".into(),
-            data: serde_json::to_value(&log).unwrap_or_default(),
+            data: serde_json::to_value(&log).expect("GiftLogEvent serializes"),
         });
     }
 

@@ -38,9 +38,7 @@ impl ConfigStore {
         };
 
         let (tx, _) = watch::channel(data.clone());
-        let store = Self { data, path, tx };
-        store.persist().await?;
-        Ok(store)
+        Ok(Self { data, path, tx })
     }
 
     pub fn get(&self) -> &AppConfig {
@@ -70,10 +68,6 @@ impl ConfigStore {
         self.data = next_data;
         let _ = self.tx.send(self.data.clone());
         Ok(())
-    }
-
-    async fn persist(&self) -> Result<(), ConfigError> {
-        self.persist_data(&self.data).await
     }
 
     async fn persist_data(&self, data: &AppConfig) -> Result<(), ConfigError> {

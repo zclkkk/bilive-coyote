@@ -204,7 +204,7 @@ impl BilibiliManager {
         let _ = self.status_tx.send(self.current_status.clone());
         let event = PanelEvent {
             event_type: "bilibili:status".into(),
-            data: serde_json::to_value(&self.current_status).unwrap_or_default(),
+            data: serde_json::to_value(&self.current_status).expect("BilibiliStatus serializes"),
         };
         let _ = self.panel_tx.send(event);
     }

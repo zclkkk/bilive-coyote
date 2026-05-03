@@ -7,9 +7,10 @@ const MIXIN_KEY_ENC_TAB: [usize; 64] = [
 ];
 
 fn get_mixin_key(raw: &str) -> String {
+    let chars: Vec<char> = raw.chars().collect();
     MIXIN_KEY_ENC_TAB
         .iter()
-        .map(|&i| raw.chars().nth(i).unwrap_or('?'))
+        .filter_map(|&i| chars.get(i).copied())
         .take(32)
         .collect()
 }

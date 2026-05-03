@@ -84,9 +84,10 @@ pub async fn bilibili_stop(
     Ok(Json(SuccessResponse { success: true }))
 }
 
-pub async fn bilibili_status(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
-    let status = state.bilibili.status.borrow().clone();
-    Ok(Json(serde_json::to_value(&status).unwrap_or_default()))
+pub async fn bilibili_status(
+    State(state): State<AppState>,
+) -> Json<crate::engine::types::BilibiliStatus> {
+    Json(state.bilibili.status.borrow().clone())
 }
 
 pub async fn coyote_status(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {

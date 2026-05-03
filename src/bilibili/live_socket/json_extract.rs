@@ -14,57 +14,17 @@ pub fn extract_json_messages(body: &[u8]) -> Vec<serde_json::Value> {
 
     let mut messages = Vec::new();
     for chunk in source {
-        if let Some(json_start) = chunk.find('{') {
-            let json_str = &chunk[json_start..];
-            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
-                if parsed.is_object() {
-                    messages.push(parsed);
-                }
-            } else {
-                let end = find_json_end(json_str);
-                if end > 0 {
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&json_str[..end])
-                    {
-                        if parsed.is_object() {
-                            messages.push(parsed);
-                        }
-                    }
-                }
+        let Some(json_start) = chunk.find('{') else {
+            continue;
+        };
+        let json_str = &chunk[json_start..];
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
+            if parsed.is_object() {
+                messages.push(parsed);
             }
         }
     }
     messages
-}
-
-fn find_json_end(s: &str) -> usize {
-    let mut depth = 0i32;
-    let mut in_string = false;
-    let mut escape = false;
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let c = bytes[i];
-        if escape {
-            escape = false;
-        } else if in_string {
-            if c == b'\\' {
-                escape = true;
-            } else if c == b'"' {
-                in_string = false;
-            }
-        } else if c == b'"' {
-            in_string = true;
-        } else if c == b'{' {
-            depth += 1;
-        } else if c == b'}' {
-            depth -= 1;
-            if depth == 0 {
-                return i + 1;
-            }
-        }
-        i += 1;
-    }
-    0
 }
 
 #[cfg(test)]
@@ -89,11 +49,20 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_skips_non_json() {
-        let body = b"some garbage {\"cmd\":\"OK\"} more garbage";
+    fn test_extract_skips_non_json_prefix() {
+        let body = b"some garbage {\"cmd\":\"OK\"}";
         let msgs = extract_json_messages(body);
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0]["cmd"], "OK");
+    }
+
+    #[test]
+    fn test_extract_drops_chunk_with_trailing_garbage() {
+        // Matches the TS original: serde_json::from_str rejects trailing text,
+        // and we no longer carry a manual brace-scanning fallback.
+        let body = b"{\"cmd\":\"OK\"} trailing garbage";
+        let msgs = extract_json_messages(body);
+        assert!(msgs.is_empty());
     }
 
     #[test]
