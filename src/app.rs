@@ -23,6 +23,7 @@ pub struct App {
 impl App {
     pub async fn init(config_path: &str, state_path: &str) -> anyhow::Result<Self> {
         let config = ConfigStore::load_or_default(config_path)
+            .await
             .map_err(|e| anyhow::anyhow!("Config error: {e}"))?;
         let state = RuntimeStateStore::load_or_default(state_path);
 

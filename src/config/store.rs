@@ -21,7 +21,7 @@ pub struct ConfigStore {
 }
 
 impl ConfigStore {
-    pub fn load_or_default(path: impl Into<PathBuf>) -> Result<Self, ConfigError> {
+    pub async fn load_or_default(path: impl Into<PathBuf>) -> Result<Self, ConfigError> {
         let path = path.into();
         let default = AppConfig::default();
         let default_json = serde_json::to_value(&default).map_err(ConfigError::Json)?;
@@ -42,7 +42,9 @@ impl ConfigStore {
         };
 
         let (tx, _) = watch::channel(data.clone());
-        Ok(Self { data, path, tx })
+        let store = Self { data, path, tx };
+        store.persist().await?;
+        Ok(store)
     }
 
     pub fn get(&self) -> &AppConfig {
@@ -60,21 +62,29 @@ impl ConfigStore {
     pub async fn update(&mut self, partial: serde_json::Value) -> Result<(), ConfigError> {
         let current_json = serde_json::to_value(&self.data).map_err(ConfigError::Json)?;
         let merged = deep_merge(&current_json, &partial);
-        self.data = validate_config(&merged)?;
-        self.persist().await?;
+        let next = validate_config(&merged)?;
+        self.persist_data(&next).await?;
+        self.data = next;
         let _ = self.tx.send(self.data.clone());
         Ok(())
     }
 
     pub async fn set_rules(&mut self, rules: serde_json::Value) -> Result<(), ConfigError> {
-        self.data.rules = validate_rules(&rules)?;
-        self.persist().await?;
+        let next_rules = validate_rules(&rules)?;
+        let mut next_data = self.data.clone();
+        next_data.rules = next_rules;
+        self.persist_data(&next_data).await?;
+        self.data = next_data;
         let _ = self.tx.send(self.data.clone());
         Ok(())
     }
 
     async fn persist(&self) -> Result<(), ConfigError> {
-        let content = serde_json::to_string_pretty(&self.data).map_err(ConfigError::Json)?;
+        self.persist_data(&self.data).await
+    }
+
+    async fn persist_data(&self, data: &AppConfig) -> Result<(), ConfigError> {
+        let content = serde_json::to_string_pretty(data).map_err(ConfigError::Json)?;
         let tmp_path = self.path.with_extension("tmp");
         tokio::fs::write(tmp_path.as_path(), content.as_bytes())
             .await
