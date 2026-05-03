@@ -123,7 +123,13 @@ impl RuntimeStateStore {
         let path = path.into();
         let data = if path.exists() {
             match std::fs::read_to_string(&path) {
-                Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+                Ok(content) => match serde_json::from_str(&content) {
+                    Ok(state) => state,
+                    Err(e) => {
+                        error!("Failed to parse {}: {e}", path.display());
+                        RuntimeState::default()
+                    }
+                },
                 Err(e) => {
                     error!("Failed to read {}: {e}", path.display());
                     RuntimeState::default()
