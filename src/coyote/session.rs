@@ -30,14 +30,6 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
         return;
     }
 
-    let old_tx = state.shared.register_app(client_id.clone(), out_tx.clone());
-
-    if let Some(old) = old_tx {
-        let _ = old
-            .send(build_message("error", "", "", ERR_PEER_DISCONNECTED))
-            .await;
-    }
-
     info!("[Coyote] App connected: {client_id}");
 
     let sink_task = tokio::spawn(async move {
@@ -74,6 +66,19 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
                                 );
                                 let _ = out_tx.try_send(resp);
                                 continue;
+                            }
+
+                            let old_tx =
+                                state.shared.register_app(client_id.clone(), out_tx.clone());
+                            if let Some(old) = old_tx {
+                                let _ = old
+                                    .send(build_message(
+                                        "error",
+                                        "",
+                                        "",
+                                        ERR_PEER_DISCONNECTED,
+                                    ))
+                                    .await;
                             }
 
                             let resp =
