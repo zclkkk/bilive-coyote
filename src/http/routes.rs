@@ -1,7 +1,7 @@
 use tokio::sync::oneshot;
 
 use crate::bilibili::{BilibiliCommand, BilibiliHandle, BilibiliStart};
-use crate::config::{validate_bilibili_start, validate_manual_strength, ConfigHandle};
+use crate::config::{parse_bilibili_start, parse_manual_strength, ConfigHandle};
 use crate::coyote::{generate_qr_data_url, CoyoteHandle};
 use crate::engine::types::StrengthStatus;
 use crate::engine::StrengthCommand;
@@ -55,11 +55,8 @@ pub async fn bilibili_start(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
-    let default_source = {
-        let cfg = state.config.lock().await;
-        cfg.get().bilibili.source
-    };
-    let input = validate_bilibili_start(&body, default_source)?;
+    let default_source = state.config.snapshot().bilibili.source;
+    let input = parse_bilibili_start(body, default_source)?;
     let start = BilibiliStart::from(input);
     let (tx, rx) = oneshot::channel();
     state
@@ -136,7 +133,7 @@ pub async fn coyote_strength(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
-    let ms = validate_manual_strength(&body)?;
+    let ms = parse_manual_strength(body)?;
     state
         .strength_cmd
         .send(StrengthCommand::ManualStrength {
@@ -214,7 +211,7 @@ pub async fn put_rules(
         .map_err(|e| ApiError::Validation(format!("Invalid rules: {e}")))?;
     {
         let mut cfg = state.config.lock().await;
-        cfg.set_rules(serde_json::to_value(&rules).unwrap()).await?;
+        cfg.set_rules(rules.clone()).await?;
     }
     let _ = state
         .strength_cmd

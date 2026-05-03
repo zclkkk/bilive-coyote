@@ -1,5 +1,5 @@
-use crate::config::types::{AppConfig, RuntimeState};
-use crate::config::validation::{validate_config, validate_rules, ValidationError};
+use crate::config::types::{AppConfig, GiftRule, RuntimeState};
+use crate::config::validation::{validate_app_config, validate_rules, ValidationError};
 use std::path::PathBuf;
 use tokio::sync::watch;
 use tracing::error;
@@ -24,19 +24,15 @@ impl ConfigStore {
     pub async fn load_or_default(path: impl Into<PathBuf>) -> Result<Self, ConfigError> {
         let path = path.into();
         let default = AppConfig::default();
-        let default_json = serde_json::to_value(&default).map_err(ConfigError::Json)?;
 
         let data = if path.exists() {
             let content = std::fs::read_to_string(&path).map_err(ConfigError::Io)?;
-            let parsed: serde_json::Value =
-                serde_json::from_str(&content).map_err(ConfigError::Json)?;
+            let parsed: serde_json::Value = serde_json::from_str(&content)?;
+            let default_json = serde_json::to_value(&default)?;
             let merged = deep_merge(&default_json, &parsed);
-            validate_config(&merged).map_err(|e| {
-                ConfigError::Validation(ValidationError::Message(format!(
-                    "Config validation failed for {}: {e}",
-                    path.display()
-                )))
-            })?
+            let cfg: AppConfig = serde_json::from_value(merged)?;
+            validate_app_config(&cfg)?;
+            cfg
         } else {
             default
         };
@@ -56,19 +52,20 @@ impl ConfigStore {
     }
 
     pub async fn update(&mut self, partial: serde_json::Value) -> Result<(), ConfigError> {
-        let current_json = serde_json::to_value(&self.data).map_err(ConfigError::Json)?;
+        let current_json = serde_json::to_value(&self.data)?;
         let merged = deep_merge(&current_json, &partial);
-        let next = validate_config(&merged)?;
+        let next: AppConfig = serde_json::from_value(merged)?;
+        validate_app_config(&next)?;
         self.persist_data(&next).await?;
         self.data = next;
         let _ = self.tx.send(self.data.clone());
         Ok(())
     }
 
-    pub async fn set_rules(&mut self, rules: serde_json::Value) -> Result<(), ConfigError> {
-        let next_rules = validate_rules(&rules)?;
+    pub async fn set_rules(&mut self, rules: Vec<GiftRule>) -> Result<(), ConfigError> {
+        validate_rules(&rules)?;
         let mut next_data = self.data.clone();
-        next_data.rules = next_rules;
+        next_data.rules = rules;
         self.persist_data(&next_data).await?;
         self.data = next_data;
         let _ = self.tx.send(self.data.clone());
