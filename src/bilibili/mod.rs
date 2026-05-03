@@ -136,6 +136,8 @@ impl BilibiliManager {
                             self.current_status.room_id = s.room_id;
                         }
                         let _ = self.status_tx.send(self.current_status.clone());
+                    } else {
+                        self.live_status_rx = None;
                     }
                 }
             }
