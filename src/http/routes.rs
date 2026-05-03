@@ -171,41 +171,30 @@ pub async fn put_config(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
-    let safety_update = body.get("safety").cloned();
-    let rules_update = body.get("rules").cloned();
+    let has_safety = body.get("safety").is_some();
+    let has_rules = body.get("rules").is_some();
     {
         let mut cfg = state.config.lock().await;
         cfg.update(body).await?;
-    }
 
-    if let Some(safety) = safety_update {
-        let limit_a = safety.get("limitA").and_then(|v| v.as_u64()).unwrap_or(80) as u8;
-        let limit_b = safety.get("limitB").and_then(|v| v.as_u64()).unwrap_or(80) as u8;
-        let decay_enabled = safety
-            .get("decayEnabled")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
-        let decay_rate = safety
-            .get("decayRate")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(2) as u8;
-
-        let _ = state
-            .strength_cmd
-            .send(StrengthCommand::ConfigUpdate {
-                limit_a,
-                limit_b,
-                decay_enabled,
-                decay_rate,
-            })
-            .await;
-    }
-
-    if let Some(rules) = rules_update {
-        if let Ok(parsed_rules) = serde_json::from_value::<Vec<crate::config::types::GiftRule>>(rules) {
+        if has_safety {
+            let safety = &cfg.get().safety;
             let _ = state
                 .strength_cmd
-                .send(StrengthCommand::RulesUpdate(parsed_rules))
+                .send(StrengthCommand::ConfigUpdate {
+                    limit_a: safety.limit_a,
+                    limit_b: safety.limit_b,
+                    decay_enabled: safety.decay_enabled,
+                    decay_rate: safety.decay_rate,
+                })
+                .await;
+        }
+
+        if has_rules {
+            let rules = cfg.get().rules.clone();
+            let _ = state
+                .strength_cmd
+                .send(StrengthCommand::RulesUpdate(rules))
                 .await;
         }
     }
