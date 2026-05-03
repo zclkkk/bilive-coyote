@@ -104,6 +104,8 @@ impl BroadcastSource {
 
         Ok(SourceStartResult {
             status_rx: inner_status_rx,
+            room_id: Some(long_room_id),
+            game_id: None,
         })
     }
 

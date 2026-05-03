@@ -48,6 +48,8 @@ impl From<BilibiliStartInput> for BilibiliStart {
 
 pub struct SourceStartResult {
     pub status_rx: mpsc::Receiver<LiveSocketStatus>,
+    pub room_id: Option<u64>,
+    pub game_id: Option<String>,
 }
 
 #[derive(Debug)]
@@ -177,6 +179,8 @@ impl BilibiliManager {
         match result {
             Ok(source_result) => {
                 self.live_status_rx = Some(source_result.status_rx);
+                self.current_status.room_id = source_result.room_id;
+                self.current_status.game_id = source_result.game_id;
                 let _ = self.status_tx.send(self.current_status.clone());
                 let _ = reply.send(Ok(()));
             }

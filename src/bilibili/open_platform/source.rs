@@ -324,6 +324,8 @@ impl OpenPlatformSource {
 
         Ok(SourceStartResult {
             status_rx: inner_status_rx,
+            room_id: auth.roomid,
+            game_id: Some(data.game_info.game_id),
         })
     }
 }
