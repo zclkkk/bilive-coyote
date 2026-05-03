@@ -234,7 +234,8 @@ impl OpenPlatformSource {
             .await
             .map_err(|e| format!("Failed to save state: {e}"))?;
 
-        self.config
+        if let Err(e) = self
+            .config
             .lock()
             .await
             .update(serde_json::json!({
@@ -249,7 +250,9 @@ impl OpenPlatformSource {
                 }
             }))
             .await
-            .map_err(|e| format!("Failed to update config: {e}"))?;
+        {
+            warn!("[Bilibili/OpenPlatform] Failed to update config: {e}");
+        }
 
         let game_id_for_hb = data.game_info.game_id.clone();
         let gift_tx = self.gift_tx.clone();

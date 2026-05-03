@@ -6,7 +6,7 @@ use crate::config::types::GiftEvent;
 use crate::config::ConfigHandle;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::info;
+use tracing::{info, warn};
 
 pub struct BroadcastSource {
     config: ConfigHandle,
@@ -88,7 +88,8 @@ impl BroadcastSource {
             }
         });
 
-        self.config
+        if let Err(e) = self
+            .config
             .lock()
             .await
             .update(serde_json::json!({
@@ -98,7 +99,9 @@ impl BroadcastSource {
                 }
             }))
             .await
-            .map_err(|e| format!("Failed to update config: {e}"))?;
+        {
+            warn!("[Bilibili/Broadcast] Failed to update config: {e}");
+        }
 
         info!("[Bilibili/Broadcast] Started! Room: {long_room_id}");
 
