@@ -28,25 +28,20 @@ pub fn sign_open_platform_request(
     headers.insert("x-bili-signature-version".into(), "1.0".into());
     headers.insert("x-bili-timestamp".into(), timestamp.to_string());
 
-    let data: String = [
+    let ordered_keys = [
         "x-bili-accesskeyid",
         "x-bili-content-md5",
         "x-bili-signature-method",
         "x-bili-signature-nonce",
         "x-bili-signature-version",
         "x-bili-timestamp",
-    ]
-    .iter()
-    .map(|key| {
-        format!(
-            "{key}:{}",
-            headers
-                .get(&format!("x-bili-{key}"))
-                .unwrap_or(&String::new())
-        )
-    })
-    .collect::<Vec<_>>()
-    .join("\n");
+    ];
+
+    let data = ordered_keys
+        .iter()
+        .map(|key| format!("{key}:{}", headers.get(*key).unwrap()))
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let mut mac = HmacSha256::new_from_slice(app_secret.as_bytes()).unwrap();
     mac.update(data.as_bytes());
@@ -87,5 +82,34 @@ mod tests {
         let h1 = sign_open_platform_request(&params, "key", "secret");
         let h2 = sign_open_platform_request(&params, "key", "secret");
         assert_eq!(h1.get("x-bili-content-md5"), h2.get("x-bili-content-md5"));
+    }
+
+    #[test]
+    fn test_sign_authorization_is_valid_hmac() {
+        let params = serde_json::json!({"code": "test", "app_id": 1});
+        let headers = sign_open_platform_request(&params, "mykey", "mysecret");
+
+        let auth = headers.get("Authorization").expect("Authorization header missing");
+        assert!(!auth.is_empty(), "Authorization must not be empty");
+
+        let ordered_keys = [
+            "x-bili-accesskeyid",
+            "x-bili-content-md5",
+            "x-bili-signature-method",
+            "x-bili-signature-nonce",
+            "x-bili-signature-version",
+            "x-bili-timestamp",
+        ];
+
+        let reconstructed = ordered_keys
+            .iter()
+            .map(|key| format!("{key}:{}", headers.get(*key).unwrap()))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let mut mac = HmacSha256::new_from_slice(b"mysecret").unwrap();
+        mac.update(reconstructed.as_bytes());
+        let expected = hex::encode(mac.finalize().into_bytes());
+        assert_eq!(auth, &expected, "Authorization must match reconstructed HMAC");
     }
 }
