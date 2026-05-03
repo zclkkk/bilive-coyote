@@ -5,7 +5,7 @@ use axum::extract::{State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tracing::info;
 
 pub async fn coyote_ws_handler(
@@ -30,6 +30,8 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
         return;
     }
 
+    let (close_tx, mut close_rx) = watch::channel(false);
+
     info!("[Coyote] App connected: {client_id}");
 
     let sink_task = tokio::spawn(async move {
@@ -41,80 +43,110 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
     });
 
     while let Some(Ok(msg)) = ws_stream.next().await {
-        match msg {
-            Message::Text(text) => {
-                let parsed = parse_message(&text);
-                match parsed {
-                    Ok(coyote_msg) => {
-                        if coyote_msg.msg_type.as_str() == Some("bind") {
-                            if !state.shared.bridge_id_matches(&coyote_msg.client_id) {
-                                let resp = build_message(
-                                    "bind",
-                                    &coyote_msg.client_id,
-                                    &coyote_msg.target_id,
-                                    ERR_INVALID_QR_CLIENT_ID,
-                                );
-                                let _ = out_tx.try_send(resp);
-                                continue;
-                            }
-                            if coyote_msg.target_id != client_id {
-                                let resp = build_message(
-                                    "bind",
-                                    &coyote_msg.client_id,
-                                    &coyote_msg.target_id,
-                                    ERR_NO_TARGET_ID,
-                                );
-                                let _ = out_tx.try_send(resp);
-                                continue;
-                            }
+        let text = match msg {
+            Message::Text(text) => text,
+            Message::Close(_) | _ => {
+                sink_task.abort();
+                return;
+            }
+        };
 
-                            let old_tx =
-                                state.shared.register_app(client_id.clone(), out_tx.clone());
-                            if let Some(old) = old_tx {
-                                let _ = old
-                                    .send(build_message(
+        let parsed = parse_message(&text);
+        let coyote_msg = match parsed {
+            Ok(msg) => msg,
+            Err(err) => {
+                let resp = build_message("msg", "", "", err.code);
+                let _ = out_tx.try_send(resp);
+                continue;
+            }
+        };
+
+        if coyote_msg.msg_type.as_str() != Some("bind") {
+            let resp =
+                build_message("error", &coyote_msg.client_id, &coyote_msg.target_id, ERR_NOT_PAIRED);
+            let _ = out_tx.try_send(resp);
+            continue;
+        }
+
+        if !state.shared.bridge_id_matches(&coyote_msg.client_id) {
+            let resp = build_message(
+                "bind",
+                &coyote_msg.client_id,
+                &coyote_msg.target_id,
+                ERR_INVALID_QR_CLIENT_ID,
+            );
+            let _ = out_tx.try_send(resp);
+            continue;
+        }
+        if coyote_msg.target_id != client_id {
+            let resp = build_message(
+                "bind",
+                &coyote_msg.client_id,
+                &coyote_msg.target_id,
+                ERR_NO_TARGET_ID,
+            );
+            let _ = out_tx.try_send(resp);
+            continue;
+        }
+
+        let old_tx =
+            state.shared.register_app(client_id.clone(), out_tx.clone(), close_tx);
+        if let Some(old) = old_tx {
+            let _ = old
+                .send(build_message("error", "", "", ERR_PEER_DISCONNECTED))
+                .await;
+        }
+
+        let resp = build_message("bind", &state.bridge_id, &client_id, ERR_SUCCESS);
+        let _ = out_tx.try_send(resp);
+        info!("[Coyote] Paired with app: {client_id}");
+        break;
+    }
+
+    loop {
+        tokio::select! {
+            msg = ws_stream.next() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        let parsed = parse_message(&text);
+                        match parsed {
+                            Ok(coyote_msg) => {
+                                let is_paired = state.shared.is_paired_app(&client_id)
+                                    && state.shared.bridge_id_matches(&coyote_msg.client_id);
+
+                                if !is_paired {
+                                    let resp = build_message(
                                         "error",
-                                        "",
-                                        "",
-                                        ERR_PEER_DISCONNECTED,
-                                    ))
-                                    .await;
+                                        &coyote_msg.client_id,
+                                        &coyote_msg.target_id,
+                                        ERR_NOT_PAIRED,
+                                    );
+                                    let _ = out_tx.try_send(resp);
+                                    continue;
+                                }
+
+                                state.shared.handle_app_message(&coyote_msg.message);
                             }
-
-                            let resp =
-                                build_message("bind", &state.bridge_id, &client_id, ERR_SUCCESS);
-                            let _ = out_tx.try_send(resp);
-                            info!("[Coyote] Paired with app: {client_id}");
-                        } else {
-                            let is_paired = state.shared.is_paired_app(&client_id)
-                                && state.shared.bridge_id_matches(&coyote_msg.client_id);
-
-                            if !is_paired {
-                                let resp = build_message(
-                                    "error",
-                                    &coyote_msg.client_id,
-                                    &coyote_msg.target_id,
-                                    ERR_NOT_PAIRED,
-                                );
+                            Err(err) => {
+                                let resp = build_message("msg", "", "", err.code);
                                 let _ = out_tx.try_send(resp);
-                                continue;
                             }
-
-                            state.shared.handle_app_message(&coyote_msg.message);
                         }
                     }
-                    Err(err) => {
-                        let resp = build_message("msg", "", "", err.code);
-                        let _ = out_tx.try_send(resp);
-                    }
+                    Some(Ok(Message::Close(_))) => break,
+                    None => break,
+                    _ => {}
                 }
             }
-            Message::Close(_) => break,
-            _ => {}
+            _ = close_rx.changed() => {
+                if *close_rx.borrow() {
+                    break;
+                }
+            }
         }
     }
 
-    state.shared.disconnect_app();
+    state.shared.disconnect_app(&client_id);
     sink_task.abort();
     info!("[Coyote] App disconnected: {client_id}");
 }

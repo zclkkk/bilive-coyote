@@ -50,6 +50,7 @@ pub struct CoyoteHandle {
 struct CoyoteSharedState {
     app_client_id: std::sync::Mutex<Option<String>>,
     app_tx: std::sync::Mutex<Option<mpsc::Sender<String>>>,
+    close_tx: std::sync::Mutex<Option<watch::Sender<bool>>>,
 }
 
 pub struct CoyoteSharedHandle {
@@ -63,7 +64,13 @@ impl CoyoteSharedHandle {
         &self,
         client_id: String,
         tx: mpsc::Sender<String>,
+        close_tx: watch::Sender<bool>,
     ) -> Option<mpsc::Sender<String>> {
+        if let Some(old_close_tx) = self.shared.close_tx.lock().unwrap().take() {
+            let _ = old_close_tx.send(true);
+        }
+        *self.shared.close_tx.lock().unwrap() = Some(close_tx);
+
         let old = self.shared.app_tx.lock().unwrap().take();
         *self.shared.app_client_id.lock().unwrap() = Some(client_id);
         *self.shared.app_tx.lock().unwrap() = Some(tx);
@@ -99,7 +106,10 @@ impl CoyoteSharedHandle {
         }
     }
 
-    pub fn disconnect_app(&self) {
+    pub fn disconnect_app(&self, client_id: &str) {
+        if !self.is_paired_app(client_id) {
+            return;
+        }
         *self.shared.app_client_id.lock().unwrap() = None;
         *self.shared.app_tx.lock().unwrap() = None;
         let _ = self.status_tx.send(CoyoteStatus::default());
@@ -121,6 +131,7 @@ impl CoyoteManager {
         let shared = Arc::new(CoyoteSharedState {
             app_client_id: std::sync::Mutex::new(None),
             app_tx: std::sync::Mutex::new(None),
+            close_tx: std::sync::Mutex::new(None),
         });
 
         let shared_handle = Arc::new(CoyoteSharedHandle {
