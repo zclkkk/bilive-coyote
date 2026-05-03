@@ -29,6 +29,7 @@ pub enum StrengthCommand {
         decay_enabled: bool,
         decay_rate: u8,
     },
+    RulesUpdate(Vec<GiftRule>),
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +149,9 @@ impl StrengthEngine {
                             self.decay_enabled = decay_enabled;
                             self.decay_rate = decay_rate;
                             self.enforce_limits().await;
+                        }
+                        Some(StrengthCommand::RulesUpdate(rules)) => {
+                            self.rules = rules;
                         }
                         None => break,
                     }

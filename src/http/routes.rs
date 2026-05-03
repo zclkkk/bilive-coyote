@@ -172,6 +172,7 @@ pub async fn put_config(
     Json(body): Json<Value>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
     let safety_update = body.get("safety").cloned();
+    let rules_update = body.get("rules").cloned();
     {
         let mut cfg = state.config.lock().await;
         cfg.update(body).await?;
@@ -200,6 +201,15 @@ pub async fn put_config(
             .await;
     }
 
+    if let Some(rules) = rules_update {
+        if let Ok(parsed_rules) = serde_json::from_value::<Vec<crate::config::types::GiftRule>>(rules) {
+            let _ = state
+                .strength_cmd
+                .send(StrengthCommand::RulesUpdate(parsed_rules))
+                .await;
+        }
+    }
+
     Ok(Json(SuccessResponse { success: true }))
 }
 
@@ -214,9 +224,15 @@ pub async fn put_rules(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
+    let rules: Vec<crate::config::types::GiftRule> = serde_json::from_value(body)
+        .map_err(|e| ApiError::Validation(format!("Invalid rules: {e}")))?;
     {
         let mut cfg = state.config.lock().await;
-        cfg.set_rules(body).await?;
+        cfg.set_rules(serde_json::to_value(&rules).unwrap()).await?;
     }
+    let _ = state
+        .strength_cmd
+        .send(StrengthCommand::RulesUpdate(rules))
+        .await;
     Ok(Json(SuccessResponse { success: true }))
 }
