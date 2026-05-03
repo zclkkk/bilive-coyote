@@ -7,8 +7,9 @@ use crate::bilibili::live_socket::LiveSocketStatus;
 use crate::bilibili::open_platform::OpenPlatformSource;
 use crate::config::types::{BilibiliSourceType, GiftEvent};
 use crate::config::{BilibiliStartInput, ConfigHandle, RuntimeStateStore};
-use crate::engine::types::BilibiliStatus;
+use crate::engine::types::{BilibiliStatus, PanelEvent};
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast as bcast;
 use tokio::sync::{mpsc, oneshot, watch};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +67,7 @@ pub struct BilibiliHandle {
 pub struct BilibiliManager {
     cmd_rx: mpsc::Receiver<BilibiliCommand>,
     status_tx: watch::Sender<BilibiliStatus>,
+    panel_tx: bcast::Sender<PanelEvent>,
     current_status: BilibiliStatus,
     open_platform: OpenPlatformSource,
     broadcast: BroadcastSource,
@@ -77,6 +79,7 @@ impl BilibiliManager {
         config: ConfigHandle,
         state: RuntimeStateStore,
         gift_tx: mpsc::Sender<GiftEvent>,
+        panel_tx: bcast::Sender<PanelEvent>,
     ) -> (Self, BilibiliHandle) {
         let (cmd_tx, cmd_rx) = mpsc::channel(32);
         let initial_status = BilibiliStatus {
@@ -94,6 +97,7 @@ impl BilibiliManager {
         let manager = Self {
             cmd_rx,
             status_tx,
+            panel_tx,
             current_status: initial_status,
             open_platform,
             broadcast,
@@ -134,7 +138,7 @@ impl BilibiliManager {
                         if s.room_id.is_some() {
                             self.current_status.room_id = s.room_id;
                         }
-                        let _ = self.status_tx.send(self.current_status.clone());
+                        self.publish_status();
                     } else {
                         self.live_status_rx = None;
                     }
@@ -185,15 +189,24 @@ impl BilibiliManager {
                 self.live_status_rx = Some(source_result.status_rx);
                 self.current_status.room_id = source_result.room_id;
                 self.current_status.game_id = source_result.game_id;
-                let _ = self.status_tx.send(self.current_status.clone());
+                self.publish_status();
                 let _ = reply.send(Ok(()));
             }
             Err(e) => {
                 self.current_status.error = Some(e.clone());
-                let _ = self.status_tx.send(self.current_status.clone());
+                self.publish_status();
                 let _ = reply.send(Err(e));
             }
         }
+    }
+
+    fn publish_status(&self) {
+        let _ = self.status_tx.send(self.current_status.clone());
+        let event = PanelEvent {
+            event_type: "bilibili:status".into(),
+            data: serde_json::to_value(&self.current_status).unwrap_or_default(),
+        };
+        let _ = self.panel_tx.send(event);
     }
 
     async fn handle_stop(&mut self) {
@@ -213,6 +226,6 @@ impl BilibiliManager {
             game_id: None,
             error: None,
         };
-        let _ = self.status_tx.send(self.current_status.clone());
+        self.publish_status();
     }
 }

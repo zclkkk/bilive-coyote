@@ -3,15 +3,14 @@ use tokio::sync::oneshot;
 use crate::bilibili::{BilibiliCommand, BilibiliHandle, BilibiliStart};
 use crate::config::{parse_bilibili_start, parse_manual_strength, ConfigHandle};
 use crate::coyote::{generate_qr_data_url, CoyoteHandle};
-use crate::engine::types::StrengthStatus;
+use crate::engine::types::{PanelEvent, StrengthStatus};
 use crate::engine::StrengthCommand;
 use crate::http::error::ApiError;
-use crate::panel::PanelHub;
 use axum::extract::State;
 use axum::Json;
 use serde::Serialize;
 use serde_json::Value;
-use std::sync::Arc;
+use tokio::sync::broadcast;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -20,7 +19,7 @@ pub struct AppState {
     pub coyote: CoyoteHandle,
     pub strength_cmd: tokio::sync::mpsc::Sender<StrengthCommand>,
     pub strength_status: tokio::sync::watch::Receiver<StrengthStatus>,
-    pub panel: Arc<PanelHub>,
+    pub panel_tx: broadcast::Sender<PanelEvent>,
 }
 
 #[derive(Serialize)]

@@ -2,10 +2,10 @@ pub mod gift_mapper;
 pub mod types;
 
 use crate::config::types::{Channel, GiftEvent, GiftRule};
-use crate::coyote::CoyoteCommand;
+use crate::coyote::{CoyoteCommand, CoyoteStatus};
 use crate::engine::gift_mapper::{apply_rule, build_gift_log, match_rule};
 use crate::engine::types::{PanelEvent, StrengthSource, StrengthStatus};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{broadcast, mpsc, watch};
 
 #[derive(Debug, Clone, Default)]
 struct ChannelPair<T> {
@@ -37,19 +37,11 @@ impl<T: Copy> ChannelPair<T> {
 
 #[derive(Debug, Clone)]
 pub enum StrengthCommand {
-    Gift(GiftEvent),
     ManualStrength {
         channel: Channel,
         value: u8,
     },
     EmergencyStop,
-    CoyoteFeedback {
-        strength_a: u8,
-        strength_b: u8,
-        limit_a: u8,
-        limit_b: u8,
-    },
-    CoyoteDisconnected,
     ConfigUpdate {
         limit_a: u8,
         limit_b: u8,
@@ -76,7 +68,6 @@ struct Expiry {
 pub struct StrengthHandle {
     pub cmd_tx: mpsc::Sender<StrengthCommand>,
     pub status: watch::Receiver<StrengthStatus>,
-    pub panel_tx: tokio::sync::broadcast::Sender<PanelEvent>,
 }
 
 pub struct StrengthEngine {
@@ -87,19 +78,25 @@ pub struct StrengthEngine {
     decay_rate: u8,
     rules: Vec<GiftRule>,
     cmd_rx: mpsc::Receiver<StrengthCommand>,
+    gift_rx: mpsc::Receiver<GiftEvent>,
+    coyote_status_rx: watch::Receiver<CoyoteStatus>,
     status_tx: watch::Sender<StrengthStatus>,
-    panel_tx: tokio::sync::broadcast::Sender<PanelEvent>,
+    panel_tx: broadcast::Sender<PanelEvent>,
     coyote_cmd_tx: mpsc::Sender<CoyoteCommand>,
 }
 
 impl StrengthEngine {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rules: Vec<GiftRule>,
         limit_a: u8,
         limit_b: u8,
         decay_enabled: bool,
         decay_rate: u8,
+        gift_rx: mpsc::Receiver<GiftEvent>,
+        coyote_status_rx: watch::Receiver<CoyoteStatus>,
         coyote_cmd_tx: mpsc::Sender<CoyoteCommand>,
+        panel_tx: broadcast::Sender<PanelEvent>,
     ) -> (Self, StrengthHandle) {
         let (cmd_tx, cmd_rx) = mpsc::channel(64);
         let config_limits = ChannelPair {
@@ -115,7 +112,6 @@ impl StrengthEngine {
             effective_limit_b: limit_b,
         };
         let (status_tx, status_rx) = watch::channel(initial);
-        let (panel_tx, _) = tokio::sync::broadcast::channel(256);
 
         let engine = Self {
             channels: ChannelPair::default(),
@@ -125,15 +121,16 @@ impl StrengthEngine {
             decay_rate,
             rules,
             cmd_rx,
+            gift_rx,
+            coyote_status_rx,
             status_tx,
-            panel_tx: panel_tx.clone(),
+            panel_tx,
             coyote_cmd_tx,
         };
 
         let handle = StrengthHandle {
             cmd_tx,
             status: status_rx,
-            panel_tx,
         };
 
         (engine, handle)
@@ -147,20 +144,11 @@ impl StrengthEngine {
             tokio::select! {
                 cmd = self.cmd_rx.recv() => {
                     match cmd {
-                        Some(StrengthCommand::Gift(gift)) => {
-                            self.handle_gift(gift).await;
-                        }
                         Some(StrengthCommand::ManualStrength { channel, value }) => {
                             self.handle_manual(channel, value).await;
                         }
                         Some(StrengthCommand::EmergencyStop) => {
                             self.handle_emergency().await;
-                        }
-                        Some(StrengthCommand::CoyoteFeedback { strength_a, strength_b, limit_a, limit_b }) => {
-                            self.handle_coyote_feedback(strength_a, strength_b, limit_a, limit_b).await;
-                        }
-                        Some(StrengthCommand::CoyoteDisconnected) => {
-                            self.handle_coyote_disconnect();
                         }
                         Some(StrengthCommand::ConfigUpdate { limit_a, limit_b, decay_enabled, decay_rate }) => {
                             self.config_limits = ChannelPair { a: limit_a, b: limit_b };
@@ -173,6 +161,15 @@ impl StrengthEngine {
                         }
                         None => break,
                     }
+                }
+                gift = self.gift_rx.recv() => {
+                    let Some(gift) = gift else { break };
+                    self.handle_gift(gift).await;
+                }
+                changed = self.coyote_status_rx.changed() => {
+                    if changed.is_err() { break; }
+                    let status = self.coyote_status_rx.borrow_and_update().clone();
+                    self.handle_coyote_status(status).await;
                 }
                 _ = decay_tick.tick() => {
                     self.run_decay().await;
@@ -256,28 +253,27 @@ impl StrengthEngine {
         }
     }
 
-    async fn handle_coyote_feedback(
-        &mut self,
-        strength_a: u8,
-        strength_b: u8,
-        limit_a: u8,
-        limit_b: u8,
-    ) {
-        self.app_limits = ChannelPair { a: limit_a, b: limit_b };
-        self.apply_channel_feedback(Channel::A, strength_a).await;
-        self.apply_channel_feedback(Channel::B, strength_b).await;
-        self.emit_status();
-    }
-
-    fn handle_coyote_disconnect(&mut self) {
-        for ch in [Channel::A, Channel::B] {
-            let entry = self.channels.get_mut(ch);
-            entry.value = 0;
-            entry.baseline = 0;
-            entry.expiries.clear();
+    async fn handle_coyote_status(&mut self, status: CoyoteStatus) {
+        if status.paired {
+            self.app_limits = ChannelPair {
+                a: status.limit_a,
+                b: status.limit_b,
+            };
+            self.apply_channel_feedback(Channel::A, status.strength_a)
+                .await;
+            self.apply_channel_feedback(Channel::B, status.strength_b)
+                .await;
+        } else {
+            for ch in [Channel::A, Channel::B] {
+                let entry = self.channels.get_mut(ch);
+                entry.value = 0;
+                entry.baseline = 0;
+                entry.expiries.clear();
+            }
+            self.app_limits = ChannelPair::splat(200);
         }
-        self.app_limits = ChannelPair::splat(200);
         self.emit_status();
+        self.emit_coyote_status(&status);
     }
 
     async fn apply_channel_feedback(&mut self, channel: Channel, app_value: u8) {
@@ -359,6 +355,22 @@ impl StrengthEngine {
                 "source": source,
             }),
         });
+    }
+
+    fn emit_coyote_status(&self, status: &CoyoteStatus) {
+        let event = PanelEvent {
+            event_type: "coyote:status".into(),
+            data: serde_json::json!({
+                "paired": status.paired,
+                "strengthA": status.strength_a,
+                "strengthB": status.strength_b,
+                "limitA": status.limit_a,
+                "limitB": status.limit_b,
+                "effectiveLimitA": self.effective_limit(Channel::A),
+                "effectiveLimitB": self.effective_limit(Channel::B),
+            }),
+        };
+        let _ = self.panel_tx.send(event);
     }
 
     fn emit_status(&self) {

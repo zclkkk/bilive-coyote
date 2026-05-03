@@ -5,7 +5,6 @@ mod config;
 mod coyote;
 mod engine;
 mod http;
-mod panel;
 
 use clap::Parser;
 

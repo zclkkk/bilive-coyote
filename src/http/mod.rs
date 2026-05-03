@@ -30,16 +30,15 @@ async fn panel_ws_handler(
     ws: axum::extract::WebSocketUpgrade,
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> impl axum::response::IntoResponse {
-    ws.on_upgrade(move |socket| handle_panel_socket(socket, state.panel.clone()))
+    ws.on_upgrade(move |socket| handle_panel_socket(socket, state.panel_tx.subscribe()))
 }
 
 async fn handle_panel_socket(
     socket: axum::extract::ws::WebSocket,
-    hub: std::sync::Arc<crate::panel::PanelHub>,
+    mut rx: tokio::sync::broadcast::Receiver<crate::engine::types::PanelEvent>,
 ) {
     use futures_util::{SinkExt, StreamExt};
     let (mut ws_sink, mut ws_stream) = socket.split();
-    let mut rx = hub.subscribe();
 
     let write_task = tokio::spawn(async move {
         while let Ok(event) = rx.recv().await {
