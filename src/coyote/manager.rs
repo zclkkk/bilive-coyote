@@ -170,56 +170,61 @@ impl CoyoteManager {
                 cmd = self.cmd_rx.recv() => {
                     match cmd {
                         Some(CoyoteCommand::SendStrength { channel, mode, value }) => {
-                            self.send_strength(channel, mode, value);
+                            self.send_strength(channel, mode, value).await;
                         }
                         Some(CoyoteCommand::Clear { channel }) => {
-                            self.send_clear(channel);
+                            self.send_clear(channel).await;
                         }
                         None => break,
                     }
                 }
                 _ = heartbeat.tick() => {
-                    self.send_heartbeat();
+                    self.send_heartbeat().await;
                 }
             }
         }
     }
 
-    fn send_strength(&self, channel: Channel, mode: u8, value: u8) {
+    async fn send_strength(&self, channel: Channel, mode: u8, value: u8) {
         let ch_num = match channel {
             Channel::A => 1,
             Channel::B => 2,
         };
-        self.send_app_command(&format!("strength-{ch_num}+{mode}+{value}"));
+        self.send_app_command(&format!("strength-{ch_num}+{mode}+{value}"))
+            .await;
     }
 
-    fn send_clear(&self, channel: Channel) {
+    async fn send_clear(&self, channel: Channel) {
         let ch_num = match channel {
             Channel::A => 1,
             Channel::B => 2,
         };
-        self.send_app_command(&format!("clear-{ch_num}"));
+        self.send_app_command(&format!("clear-{ch_num}")).await;
     }
 
-    fn send_heartbeat(&self) {
-        let app_id = self.shared.app_client_id.lock().unwrap().clone();
-        if let Some(app_id) = app_id {
-            let msg = build_message("heartbeat", &app_id, &self.bridge_id, ERR_SUCCESS);
-            self.send_app_command_raw(&msg);
+    async fn send_heartbeat(&self) {
+        let tx = self.shared.app_tx.lock().unwrap().clone();
+        if let Some(tx) = tx {
+            let app_id = self.shared.app_client_id.lock().unwrap().clone();
+            if let Some(app_id) = app_id {
+                let msg = build_message("heartbeat", &app_id, &self.bridge_id, ERR_SUCCESS);
+                let _ = tx.send(msg).await;
+            }
         }
     }
 
-    fn send_app_command(&self, command: &str) {
+    async fn send_app_command(&self, command: &str) {
         let app_id = self.shared.app_client_id.lock().unwrap().clone();
         if let Some(app_id) = app_id {
             let msg = build_message("msg", &self.bridge_id, &app_id, command);
-            self.send_app_command_raw(&msg);
+            self.send_app_command_raw(&msg).await;
         }
     }
 
-    fn send_app_command_raw(&self, msg: &str) {
-        if let Some(tx) = self.shared.app_tx.lock().unwrap().as_ref() {
-            let _ = tx.try_send(msg.to_string());
+    async fn send_app_command_raw(&self, msg: &str) {
+        let tx = self.shared.app_tx.lock().unwrap().clone();
+        if let Some(tx) = tx {
+            let _ = tx.send(msg.to_string()).await;
         }
     }
 }
