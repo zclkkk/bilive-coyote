@@ -31,13 +31,12 @@ impl ConfigStore {
             let parsed: serde_json::Value =
                 serde_json::from_str(&content).map_err(ConfigError::Json)?;
             let merged = deep_merge(&default_json, &parsed);
-            match validate_config(&merged) {
-                Ok(cfg) => cfg,
-                Err(e) => {
-                    error!("Failed to validate {}: {e}", path.display());
-                    default
-                }
-            }
+            validate_config(&merged).map_err(|e| {
+                ConfigError::Validation(ValidationError::Message(format!(
+                    "Config validation failed for {}: {e}",
+                    path.display()
+                )))
+            })?
         } else {
             default
         };
