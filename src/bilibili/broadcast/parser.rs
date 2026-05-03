@@ -36,18 +36,10 @@ pub fn parse_broadcast_gift(message: &serde_json::Value) -> Option<GiftEvent> {
         return None;
     }
 
-    let d = msg.data.unwrap_or_else(|| {
-        BroadcastGiftData {
-            giftId: None,
-            giftName: None,
-            coin_type: None,
-            price: None,
-            num: None,
-            uid: None,
-            uname: None,
-            timestamp: None,
-        }
-    });
+    let d = msg.data?;
+    if d.giftId.is_none() && d.giftName.is_none() {
+        return None;
+    }
     Some(GiftEvent {
         gift_id: d.giftId.unwrap_or(0),
         gift_name: d.giftName.unwrap_or_default(),
@@ -101,7 +93,7 @@ mod tests {
     #[test]
     fn test_parse_gift_no_data() {
         let msg = serde_json::json!({"cmd": "SEND_GIFT"});
-        assert!(parse_broadcast_gift(&msg).is_some());
+        assert!(parse_broadcast_gift(&msg).is_none());
     }
 
     #[test]
