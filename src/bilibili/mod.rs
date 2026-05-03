@@ -81,7 +81,7 @@ impl BilibiliManager {
     ) -> (Self, BilibiliHandle) {
         let (cmd_tx, cmd_rx) = mpsc::channel(32);
         let initial_status = BilibiliStatus {
-            source: BilibiliSourceType::OpenPlatform,
+            source: config.snapshot().bilibili.source,
             connected: false,
             room_id: None,
             game_id: None,
