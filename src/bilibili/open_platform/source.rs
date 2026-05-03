@@ -2,7 +2,7 @@ use crate::bilibili::live_socket::{run_live_socket, LiveSocketOptions, LiveSocke
 use crate::bilibili::open_platform::parser::parse_open_platform_gift;
 use crate::bilibili::open_platform::signer::sign_open_platform_request;
 use crate::config::types::GiftEvent;
-use crate::config::{ConfigStore, RuntimeStateStore};
+use crate::config::{ConfigHandle, RuntimeStateStore};
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -47,7 +47,7 @@ struct AuthBody {
 }
 
 pub struct OpenPlatformSource {
-    config: Arc<Mutex<ConfigStore>>,
+    config: ConfigHandle,
     state: Arc<Mutex<RuntimeStateStore>>,
     gift_tx: mpsc::Sender<GiftEvent>,
     status_tx: mpsc::Sender<LiveSocketStatus>,
@@ -59,7 +59,7 @@ pub struct OpenPlatformSource {
 
 impl OpenPlatformSource {
     pub fn new(
-        config: Arc<Mutex<ConfigStore>>,
+        config: ConfigHandle,
         state: Arc<Mutex<RuntimeStateStore>>,
         gift_tx: mpsc::Sender<GiftEvent>,
         status_tx: mpsc::Sender<LiveSocketStatus>,

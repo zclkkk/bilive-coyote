@@ -1,6 +1,6 @@
 use crate::bilibili::{BilibiliHandle, BilibiliManager};
 use crate::config::types::GiftEvent;
-use crate::config::{ConfigStore, RuntimeStateStore};
+use crate::config::{ConfigHandle, ConfigStore, RuntimeStateStore};
 use crate::coyote::{CoyoteHandle, CoyoteManager};
 use crate::engine::types::PanelEvent;
 use crate::engine::{StrengthCommand, StrengthEngine, StrengthHandle};
@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use tracing::info;
 
 pub struct App {
-    config: Arc<Mutex<ConfigStore>>,
+    config: ConfigHandle,
     bilibili_handle: BilibiliHandle,
     coyote_handle: CoyoteHandle,
     strength_handle: StrengthHandle,
@@ -26,7 +26,7 @@ impl App {
             .map_err(|e| anyhow::anyhow!("Config error: {e}"))?;
         let state = RuntimeStateStore::load_or_default(state_path);
 
-        let config = Arc::new(Mutex::new(config));
+        let config = ConfigHandle::new(config);
         let state = Arc::new(Mutex::new(state));
 
         let (gift_tx, gift_rx) = tokio::sync::mpsc::channel::<GiftEvent>(256);
@@ -36,10 +36,7 @@ impl App {
 
         let (coyote_manager, coyote_handle) = CoyoteManager::new();
 
-        let cfg_snapshot = {
-            let cfg = config.lock().await;
-            cfg.get().clone()
-        };
+        let cfg_snapshot = config.snapshot();
 
         let (strength_engine, strength_handle) = StrengthEngine::new(
             cfg_snapshot.rules.clone(),
@@ -88,10 +85,9 @@ impl App {
                         })
                         .await;
 
-                    let cfg = config_for_coyote.lock().await;
-                    let effective_a = cfg.get().safety.limit_a.min(status.limit_a);
-                    let effective_b = cfg.get().safety.limit_b.min(status.limit_b);
-                    drop(cfg);
+                    let safety = config_for_coyote.snapshot().safety;
+                    let effective_a = safety.limit_a.min(status.limit_a);
+                    let effective_b = safety.limit_b.min(status.limit_b);
 
                     let event = PanelEvent {
                         event_type: "coyote:status".into(),
@@ -111,10 +107,9 @@ impl App {
                         .send(StrengthCommand::CoyoteDisconnected)
                         .await;
 
-                    let cfg = config_for_coyote.lock().await;
-                    let effective_a = cfg.get().safety.limit_a;
-                    let effective_b = cfg.get().safety.limit_b;
-                    drop(cfg);
+                    let safety = config_for_coyote.snapshot().safety;
+                    let effective_a = safety.limit_a;
+                    let effective_b = safety.limit_b;
 
                     let event = PanelEvent {
                         event_type: "coyote:status".into(),
@@ -174,10 +169,7 @@ impl App {
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
-        let cfg_snapshot = {
-            let cfg = self.config.lock().await;
-            cfg.get().clone()
-        };
+        let cfg_snapshot = self.config.snapshot();
 
         let bridge_id = self.coyote_handle.bridge_id.clone();
         let coyote_server_state = self.coyote_handle.server_state.clone();

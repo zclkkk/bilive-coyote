@@ -6,7 +6,7 @@ use crate::bilibili::broadcast::BroadcastSource;
 use crate::bilibili::live_socket::LiveSocketStatus;
 use crate::bilibili::open_platform::OpenPlatformSource;
 use crate::config::types::{BilibiliSourceType, GiftEvent};
-use crate::config::{BilibiliStartInput, ConfigStore, RuntimeStateStore};
+use crate::config::{BilibiliStartInput, ConfigHandle, RuntimeStateStore};
 use crate::engine::types::BilibiliStatus;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -69,7 +69,7 @@ pub struct BilibiliManager {
 
 impl BilibiliManager {
     pub fn new(
-        config: Arc<Mutex<ConfigStore>>,
+        config: ConfigHandle,
         state: Arc<Mutex<RuntimeStateStore>>,
         gift_tx: mpsc::Sender<GiftEvent>,
     ) -> (Self, BilibiliHandle) {

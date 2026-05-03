@@ -1,7 +1,7 @@
 use tokio::sync::oneshot;
 
 use crate::bilibili::{BilibiliCommand, BilibiliHandle, BilibiliStart};
-use crate::config::{validate_bilibili_start, validate_manual_strength, ConfigStore};
+use crate::config::{validate_bilibili_start, validate_manual_strength, ConfigHandle};
 use crate::coyote::{generate_qr_data_url, CoyoteHandle};
 use crate::engine::types::StrengthStatus;
 use crate::engine::StrengthCommand;
@@ -12,11 +12,10 @@ use axum::Json;
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub config: Arc<Mutex<ConfigStore>>,
+    pub config: ConfigHandle,
     pub bilibili: BilibiliHandle,
     pub coyote: CoyoteHandle,
     pub strength_cmd: tokio::sync::mpsc::Sender<StrengthCommand>,
@@ -33,10 +32,9 @@ pub async fn get_status(State(state): State<AppState>) -> Result<Json<Value>, Ap
     let bilibili_status = state.bilibili.status.borrow().clone();
     let cs = state.coyote.status.borrow().clone();
     let strength_status = state.strength_status.borrow().clone();
-    let cfg = state.config.lock().await;
-    let effective_limit_a = cfg.get().safety.limit_a.min(cs.limit_a);
-    let effective_limit_b = cfg.get().safety.limit_b.min(cs.limit_b);
-    drop(cfg);
+    let safety = state.config.snapshot().safety;
+    let effective_limit_a = safety.limit_a.min(cs.limit_a);
+    let effective_limit_b = safety.limit_b.min(cs.limit_b);
 
     Ok(Json(serde_json::json!({
         "bilibili": bilibili_status,
@@ -97,9 +95,9 @@ pub async fn bilibili_status(State(state): State<AppState>) -> Result<Json<Value
 
 pub async fn coyote_status(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
     let cs = state.coyote.status.borrow().clone();
-    let cfg = state.config.lock().await;
-    let effective_limit_a = cfg.get().safety.limit_a.min(cs.limit_a);
-    let effective_limit_b = cfg.get().safety.limit_b.min(cs.limit_b);
+    let safety = state.config.snapshot().safety;
+    let effective_limit_a = safety.limit_a.min(cs.limit_a);
+    let effective_limit_b = safety.limit_b.min(cs.limit_b);
     Ok(Json(serde_json::json!({
         "paired": cs.paired,
         "strengthA": cs.strength_a,
@@ -162,8 +160,8 @@ pub async fn coyote_emergency(
 }
 
 pub async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
-    let cfg = state.config.lock().await;
-    let value = serde_json::to_value(cfg.get()).map_err(|e| ApiError::Internal(e.to_string()))?;
+    let cfg = state.config.snapshot();
+    let value = serde_json::to_value(cfg).map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(value))
 }
 
@@ -203,8 +201,7 @@ pub async fn put_config(
 }
 
 pub async fn get_rules(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
-    let cfg = state.config.lock().await;
-    let rules = &cfg.get().rules;
+    let rules = &state.config.snapshot().rules;
     let value = serde_json::to_value(rules).map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(value))
 }

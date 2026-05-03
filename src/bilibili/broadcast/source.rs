@@ -2,13 +2,13 @@ use crate::bilibili::broadcast::parser::parse_broadcast_gift;
 use crate::bilibili::broadcast::wbi::fetch_danmu_info;
 use crate::bilibili::live_socket::{run_live_socket, LiveSocketOptions, LiveSocketStatus};
 use crate::config::types::GiftEvent;
-use crate::config::ConfigStore;
+use crate::config::ConfigHandle;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 use tracing::info;
 
 pub struct BroadcastSource {
-    config: Arc<Mutex<ConfigStore>>,
+    config: ConfigHandle,
     gift_tx: mpsc::Sender<GiftEvent>,
     status_tx: mpsc::Sender<LiveSocketStatus>,
     cancel: Arc<std::sync::Mutex<tokio_util::sync::CancellationToken>>,
@@ -16,7 +16,7 @@ pub struct BroadcastSource {
 
 impl BroadcastSource {
     pub fn new(
-        config: Arc<Mutex<ConfigStore>>,
+        config: ConfigHandle,
         gift_tx: mpsc::Sender<GiftEvent>,
         status_tx: mpsc::Sender<LiveSocketStatus>,
     ) -> Self {

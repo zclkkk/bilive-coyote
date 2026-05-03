@@ -50,6 +50,14 @@ impl ConfigStore {
         &self.data
     }
 
+    pub fn subscribe(&self) -> watch::Receiver<AppConfig> {
+        self.tx.subscribe()
+    }
+
+    pub fn sender(&self) -> watch::Sender<AppConfig> {
+        self.tx.clone()
+    }
+
     pub async fn update(&mut self, partial: serde_json::Value) -> Result<(), ConfigError> {
         let current_json = serde_json::to_value(&self.data).map_err(ConfigError::Json)?;
         let merged = deep_merge(&current_json, &partial);
