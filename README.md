@@ -1,69 +1,41 @@
 # bilive-coyote
 
-Bilibili 直播礼物 → DG-LAB Coyote 强度 LAN 桥接服务。
+Bilibili 直播礼物到 DG-LAB Coyote 3.0 的局域网 WebSocket 桥接服务。
+
+项目内置控制面板、B 站礼物监听、礼物规则引擎、DG-LAB APP Socket 配对服务和官方 V3 波形输出。启动后用 DG-LAB APP 扫描面板二维码，礼物或手动操作会转换为 Coyote A/B 通道强度和波形。
 
 ## 功能
 
-- 接收 B站直播礼物（开放平台 / 弹幕广播两种来源）
-- 按规则映射为 DG-LAB Coyote 设备强度指令
-- 通过局域网 WebSocket 控制 Coyote App
-- Web 控制面板实时查看状态
+- B 站直播礼物监听：开放平台 / Broadcast 弹幕广播
+- DG-LAB APP Socket 配对：二维码、状态反馈、强度反馈
+- 礼物规则：强度加成、持续时间、波形切换
+- 强度生命周期：安全上限、APP 上限、衰减、紧急停止
+- 波形输出：内置官方 V3 波形，强度大于 0 时自动持续补发
+- Web 控制面板：状态、配对、强度、波形、规则、安全配置、日志
 
-## 构建
+## 快速开始
 
 ```bash
 cargo build --release
-```
-
-## 运行
-
-```bash
-# 使用默认配置文件
 ./target/release/bilive-coyote
-
-# 指定配置和状态文件
-./target/release/bilive-coyote --config my-config.json --state my-state.json
-
-# 环境变量方式
-CONFIG_PATH=my-config.json STATE_PATH=my-state.json ./target/release/bilive-coyote
 ```
 
-首次运行会在当前目录生成 `config.json`，编辑后填入 B站开放平台凭证或直播间房间号。
+打开控制面板：
 
-## 配置
-
-编辑 `config.json`：
-
-```json
-{
-  "bilibili": {
-    "source": "broadcast",
-    "openPlatform": { "appKey": "", "appSecret": "", "code": "", "appId": 0 },
-    "broadcast": { "roomId": 0 }
-  },
-  "coyote": { "wsPort": 9999 },
-  "server": { "httpPort": 3000, "host": "0.0.0.0" },
-  "rules": [
-    { "giftName": "小心心", "coinType": "silver", "channel": "A", "strengthAdd": 5, "duration": 10 }
-  ],
-  "safety": { "limitA": 80, "limitB": 80, "decayEnabled": true, "decayRate": 2 }
-}
+```txt
+http://localhost:3000
 ```
 
-## API
+用 DG-LAB APP 的 Socket 功能扫描面板二维码完成配对。
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/status` | 全局状态 |
-| POST | `/api/bilibili/start` | 启动 B站连接 |
-| POST | `/api/bilibili/stop` | 停止 B站连接 |
-| GET | `/api/coyote/status` | Coyote 配对状态 |
-| GET | `/api/coyote/qrcode` | 获取配对二维码 |
-| POST | `/api/coyote/strength` | 手动设置强度 |
-| POST | `/api/coyote/emergency` | 紧急停止 |
-| GET/PUT | `/api/config` | 读写配置 |
-| GET/PUT | `/api/config/rules` | 读写规则 |
-| WS | `/ws/panel` | 面板事件推送 |
+## 文档
+
+- [安装与运行](docs/setup.md)
+- [配置与礼物规则](docs/configuration.md)
+- [B 站数据源](docs/bilibili-sources.md)
+- [DG-LAB Coyote 与波形](docs/coyote.md)
+- [HTTP 与 WebSocket API](docs/api.md)
+- [开发与架构](docs/development.md)
 
 ## 技术栈
 
