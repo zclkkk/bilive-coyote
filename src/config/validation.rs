@@ -1,4 +1,5 @@
 use crate::config::types::{AppConfig, BilibiliSourceType, Channel, GiftRule};
+use crate::coyote::waveform::{is_waveform_id, NEXT_WAVEFORM};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -52,17 +53,36 @@ fn validate_rule(rule: &GiftRule, index: usize) -> Result<(), ValidationError> {
     if rule.gift_name.trim().is_empty() {
         return Err(err(format!("rules[{index}].giftName is required")));
     }
-    if rule.strength_add < 1 || rule.strength_add > 200 {
+    if rule.strength_add > 200 {
         return Err(err(format!(
-            "rules[{index}].strengthAdd must be between 1 and 200"
+            "rules[{index}].strengthAdd must be between 0 and 200"
         )));
     }
-    if rule.duration < 1 {
+    if rule.strength_add == 0 {
+        if rule.waveform.is_none() {
+            return Err(err(format!(
+                "rules[{index}] must change strength or waveform"
+            )));
+        }
+        if rule.duration != 0 {
+            return Err(err(format!(
+                "rules[{index}].duration must be 0 when strengthAdd is 0"
+            )));
+        }
+    } else if rule.duration < 1 {
         return Err(err(format!("rules[{index}].duration must be >= 1")));
     }
     if let Some(gift_id) = rule.gift_id {
         if gift_id < 1 {
             return Err(err(format!("rules[{index}].giftId must be >= 1")));
+        }
+    }
+    if let Some(waveform) = rule.waveform.as_ref() {
+        if waveform.trim() != waveform || waveform.is_empty() {
+            return Err(err(format!("rules[{index}].waveform is invalid")));
+        }
+        if waveform != NEXT_WAVEFORM && !is_waveform_id(waveform) {
+            return Err(err(format!("rules[{index}].waveform is unknown")));
         }
     }
     Ok(())
@@ -193,5 +213,50 @@ mod tests {
     fn bilibili_start_rejects_zero_room_id() {
         let body = serde_json::json!({"source": "broadcast", "roomId": 0});
         assert!(parse_bilibili_start(body, BilibiliSourceType::Broadcast).is_err());
+    }
+
+    #[test]
+    fn waveform_only_rule_accepts_zero_strength_and_duration() {
+        let mut cfg = AppConfig::default();
+        cfg.rules.push(GiftRule {
+            gift_name: "换波形".into(),
+            gift_id: None,
+            coin_type: crate::config::types::CoinType::All,
+            channel: crate::config::types::RuleChannel::Both,
+            strength_add: 0,
+            duration: 0,
+            waveform: Some("next".into()),
+        });
+        validate_app_config(&cfg).unwrap();
+    }
+
+    #[test]
+    fn rejects_rule_that_does_nothing() {
+        let mut cfg = AppConfig::default();
+        cfg.rules.push(GiftRule {
+            gift_name: "noop".into(),
+            gift_id: None,
+            coin_type: crate::config::types::CoinType::All,
+            channel: crate::config::types::RuleChannel::A,
+            strength_add: 0,
+            duration: 0,
+            waveform: None,
+        });
+        assert!(validate_app_config(&cfg).is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_waveform() {
+        let mut cfg = AppConfig::default();
+        cfg.rules.push(GiftRule {
+            gift_name: "bad".into(),
+            gift_id: None,
+            coin_type: crate::config::types::CoinType::All,
+            channel: crate::config::types::RuleChannel::A,
+            strength_add: 0,
+            duration: 0,
+            waveform: Some("missing".into()),
+        });
+        assert!(validate_app_config(&cfg).is_err());
     }
 }

@@ -77,6 +77,26 @@
     </div>
 
     <div class="card">
+      <div class="card-title">波形控制</div>
+      <div class="waveform-control">
+        <div class="waveform-ctrl-group">
+          <div class="form-group">
+            <label>A通道波形</label>
+            <select id="waveform-a"></select>
+          </div>
+          <button type="button" class="btn btn-secondary" data-wave-channel="A" data-wave-action="next">下一个</button>
+        </div>
+        <div class="waveform-ctrl-group">
+          <div class="form-group">
+            <label>B通道波形</label>
+            <select id="waveform-b"></select>
+          </div>
+          <button type="button" class="btn btn-secondary" data-wave-channel="B" data-wave-action="next">下一个</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-title">B站配置</div>
       <div class="form-group">
         <label>数据源</label>
@@ -148,13 +168,16 @@
         </div>
         <div class="form-group">
           <label>强度</label>
-          <input id="rule-strength" type="number" value="5" min="1" max="200">
+          <input id="rule-strength" type="number" value="5" min="0" max="200">
         </div>
         <div class="form-group">
           <label>持续(秒)</label>
-          <input id="rule-duration" type="number" value="10" min="1">
+          <input id="rule-duration" type="number" value="10" min="0">
         </div>
-        <div></div>
+        <div class="form-group">
+          <label>波形</label>
+          <select id="rule-waveform"></select>
+        </div>
         <button type="button" id="add-rule-btn" class="btn btn-primary">添加规则</button>
       </div>
     </div>

@@ -17,16 +17,13 @@ pub fn match_rule(rule: &GiftRule, gift: &GiftEvent) -> bool {
 }
 
 pub fn apply_rule(rule: &GiftRule, gift: &GiftEvent) -> (Vec<StrengthChangeEvent>, String) {
-    let channels: Vec<Channel> = match rule.channel {
-        RuleChannel::Both => vec![Channel::A, Channel::B],
-        RuleChannel::A => vec![Channel::A],
-        RuleChannel::B => vec![Channel::B],
-    };
+    let channels = rule_channels(rule.channel);
     let raw_delta = (rule.strength_add as u64).saturating_mul(gift.num as u64);
     let delta_i32 = i32::try_from(raw_delta).unwrap_or(i32::MAX);
 
     let events: Vec<StrengthChangeEvent> = channels
         .iter()
+        .filter(|_| raw_delta > 0)
         .map(|&ch| StrengthChangeEvent {
             channel: ch,
             delta: delta_i32,
@@ -38,13 +35,23 @@ pub fn apply_rule(rule: &GiftRule, gift: &GiftEvent) -> (Vec<StrengthChangeEvent
         })
         .collect();
 
-    let delta_str = channels
-        .iter()
-        .map(|ch| format!("{ch:?}+{raw_delta}"))
-        .collect::<Vec<_>>()
-        .join(" ");
+    let mut effects = Vec::new();
+    if raw_delta > 0 {
+        effects.extend(channels.iter().map(|ch| format!("{ch:?}+{raw_delta}")));
+    }
+    if let Some(waveform) = rule.waveform.as_ref() {
+        effects.push(format!("波形:{waveform}"));
+    }
 
-    (events, delta_str)
+    (events, effects.join(" "))
+}
+
+pub fn rule_channels(channel: RuleChannel) -> Vec<Channel> {
+    match channel {
+        RuleChannel::Both => vec![Channel::A, Channel::B],
+        RuleChannel::A => vec![Channel::A],
+        RuleChannel::B => vec![Channel::B],
+    }
 }
 
 impl CoinType {

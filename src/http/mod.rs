@@ -16,6 +16,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/coyote/status", get(routes::coyote_status))
         .route("/api/coyote/qrcode", get(routes::coyote_qrcode))
         .route("/api/coyote/strength", post(routes::coyote_strength))
+        .route("/api/coyote/waveforms", get(routes::coyote_waveforms))
+        .route("/api/coyote/waveform", post(routes::coyote_waveform))
         .route("/api/coyote/emergency", post(routes::coyote_emergency))
         .route("/api/config", get(routes::get_config))
         .route("/api/config", put(routes::put_config))

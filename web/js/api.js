@@ -25,6 +25,8 @@ export const api = {
   coyote: {
     qrcode: () => get("/api/coyote/qrcode"),
     strength: (channel, value) => post("/api/coyote/strength", { channel, value }),
+    waveforms: () => get("/api/coyote/waveforms"),
+    waveform: (params) => post("/api/coyote/waveform", params),
     emergency: () => post("/api/coyote/emergency"),
   },
   config: {

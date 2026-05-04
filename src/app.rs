@@ -38,6 +38,8 @@ impl App {
             BilibiliManager::new(config.clone(), state, gift_tx, panel_tx.clone());
 
         let (coyote_manager, coyote_handle) = CoyoteManager::new();
+        let mut waveform_status_rx = coyote_handle.waveform_status.clone();
+        let waveform_panel_tx = panel_tx.clone();
 
         let (strength_engine, strength_handle) = StrengthEngine::new(
             cfg_snapshot.rules.clone(),
@@ -54,6 +56,21 @@ impl App {
         tokio::spawn(bilibili_manager.run());
         tokio::spawn(coyote_manager.run());
         tokio::spawn(strength_engine.run());
+        tokio::spawn(async move {
+            loop {
+                if waveform_status_rx.changed().await.is_err() {
+                    break;
+                }
+                let status = waveform_status_rx.borrow_and_update().clone();
+                let Ok(data) = serde_json::to_value(status) else {
+                    continue;
+                };
+                let _ = waveform_panel_tx.send(PanelEvent {
+                    event_type: "waveform:status".into(),
+                    data,
+                });
+            }
+        });
 
         Ok(Self {
             config,

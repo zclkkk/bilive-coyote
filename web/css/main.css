@@ -206,6 +206,22 @@ header h1 span {
   margin-bottom: 12px;
 }
 
+.waveform-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.waveform-ctrl-group {
+  background: var(--surface2);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.waveform-ctrl-group .form-group {
+  margin-bottom: 8px;
+}
+
 .limit-hint {
   font-size: 0.7rem;
   color: var(--warning);
@@ -379,7 +395,7 @@ header h1 span {
 
 .add-rule-form {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
@@ -394,6 +410,9 @@ header h1 span {
     flex-direction: column;
   }
   .add-rule-form {
+    grid-template-columns: 1fr;
+  }
+  .waveform-control {
     grid-template-columns: 1fr;
   }
   header {

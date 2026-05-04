@@ -1,14 +1,16 @@
 use tokio::sync::oneshot;
 
 use crate::bilibili::{BilibiliCommand, BilibiliHandle, BilibiliStart};
+use crate::config::types::Channel;
 use crate::config::{parse_bilibili_start, parse_manual_strength, ConfigHandle};
-use crate::coyote::{generate_qr_data_url, CoyoteHandle};
+use crate::coyote::waveform;
+use crate::coyote::{generate_qr_data_url, CoyoteCommand, CoyoteHandle};
 use crate::engine::types::{PanelEvent, StrengthStatus};
 use crate::engine::StrengthCommand;
 use crate::http::error::ApiError;
 use axum::extract::State;
 use axum::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::broadcast;
 
@@ -145,6 +147,63 @@ pub async fn coyote_strength(
     Ok(Json(SuccessResponse { success: true }))
 }
 
+pub async fn coyote_waveforms(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
+    let status = state.coyote.waveform_status.borrow().clone();
+    Ok(Json(serde_json::json!({
+        "items": waveform::list_waveforms(),
+        "selectedA": status.waveform_a,
+        "selectedB": status.waveform_b,
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaveformCommandInput {
+    pub action: String,
+    pub channel: String,
+    #[serde(default)]
+    pub waveform_id: Option<String>,
+}
+
+pub async fn coyote_waveform(
+    State(state): State<AppState>,
+    Json(body): Json<WaveformCommandInput>,
+) -> Result<Json<SuccessResponse>, ApiError> {
+    let channels = parse_waveform_channels(&body.channel)?;
+    match body.action.as_str() {
+        "select" => {
+            let waveform_id = body
+                .waveform_id
+                .filter(|id| waveform::is_waveform_id(id))
+                .ok_or_else(|| ApiError::Validation("Unknown waveformId".into()))?;
+            for channel in channels {
+                state
+                    .coyote
+                    .cmd_tx
+                    .send(CoyoteCommand::SelectWaveform {
+                        channel,
+                        waveform_id: waveform_id.clone(),
+                    })
+                    .await
+                    .map_err(|e| ApiError::Internal(e.to_string()))?;
+            }
+        }
+        "next" => {
+            for channel in channels {
+                state
+                    .coyote
+                    .cmd_tx
+                    .send(CoyoteCommand::NextWaveform { channel })
+                    .await
+                    .map_err(|e| ApiError::Internal(e.to_string()))?;
+            }
+        }
+        _ => return Err(ApiError::Validation("Unknown waveform action".into())),
+    }
+
+    Ok(Json(SuccessResponse { success: true }))
+}
+
 pub async fn coyote_emergency(
     State(state): State<AppState>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
@@ -154,6 +213,15 @@ pub async fn coyote_emergency(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(SuccessResponse { success: true }))
+}
+
+fn parse_waveform_channels(value: &str) -> Result<Vec<Channel>, ApiError> {
+    match value {
+        "A" => Ok(vec![Channel::A]),
+        "B" => Ok(vec![Channel::B]),
+        "both" => Ok(vec![Channel::A, Channel::B]),
+        _ => Err(ApiError::Validation("Invalid channel".into())),
+    }
 }
 
 pub async fn get_config(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {

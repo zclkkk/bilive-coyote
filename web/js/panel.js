@@ -9,6 +9,8 @@ const $$ = (sel) => document.querySelectorAll(sel);
 
 let currentConfig = {};
 let currentRules = [];
+let waveforms = [];
+let waveformById = new Map();
 const state = {
   strengthA: 0,
   strengthB: 0,
@@ -17,9 +19,14 @@ const state = {
   effectiveLimitA: 200,
   effectiveLimitB: 200,
 };
+const waveformState = {
+  selectedA: "breath",
+  selectedB: "breath",
+};
 let qrLoaded = false;
 
 async function init() {
+  await loadWaveforms();
   await loadConfig();
   await loadStatus();
   setupEventListeners();
@@ -34,6 +41,22 @@ async function loadConfig() {
     renderRules();
   } catch (e) {
     console.error("Load config failed:", e);
+  }
+}
+
+async function loadWaveforms() {
+  try {
+    const data = await api.coyote.waveforms();
+    waveforms = data.items || [];
+    waveformById = new Map(waveforms.map((item) => [item.id, item]));
+    updateWaveformStatus({
+      waveformA: data.selectedA || "breath",
+      waveformB: data.selectedB || "breath",
+    });
+    renderWaveformOptions();
+    renderRules();
+  } catch (e) {
+    console.error("Load waveforms failed:", e);
   }
 }
 
@@ -105,6 +128,39 @@ function renderLimitHints() {
   if (elB) elB.textContent = `(APP上限: ${state.appLimitB})`;
 }
 
+function renderWaveformOptions() {
+  const options = waveforms
+    .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
+    .join("");
+
+  const selectA = $("#waveform-a");
+  const selectB = $("#waveform-b");
+  const ruleSelect = $("#rule-waveform");
+  if (selectA) selectA.innerHTML = options;
+  if (selectB) selectB.innerHTML = options;
+  if (ruleSelect) {
+    ruleSelect.innerHTML = `
+      <option value="">不切换</option>
+      <option value="next">下一个</option>
+      ${options}
+    `;
+  }
+  renderWaveformControls();
+}
+
+function updateWaveformStatus(data) {
+  if (data.waveformA) waveformState.selectedA = data.waveformA;
+  if (data.waveformB) waveformState.selectedB = data.waveformB;
+  renderWaveformControls();
+}
+
+function renderWaveformControls() {
+  const selectA = $("#waveform-a");
+  const selectB = $("#waveform-b");
+  if (selectA) selectA.value = waveformState.selectedA;
+  if (selectB) selectB.value = waveformState.selectedB;
+}
+
 function renderRules() {
   const container = $("#rules-list");
   container.innerHTML = "";
@@ -114,7 +170,7 @@ function renderRules() {
     div.className = "rule-item";
     div.innerHTML = `
       <span class="rule-name">${escapeHtml(r.giftName)}</span>
-      <span class="rule-effect">${r.channel === "both" ? "双通道" : `${r.channel}通道`} +${r.strengthAdd} 持续${r.duration}s</span>
+      <span class="rule-effect">${escapeHtml(formatRuleEffect(r))}</span>
       <button class="btn btn-danger btn-small" data-idx="${i}">删除</button>
     `;
     container.appendChild(div);
@@ -128,6 +184,24 @@ function renderRules() {
       renderRules();
     };
   });
+}
+
+function formatRuleEffect(rule) {
+  const channel = rule.channel === "both" ? "双通道" : `${rule.channel}通道`;
+  const parts = [];
+  if ((rule.strengthAdd || 0) > 0) {
+    parts.push(`${channel} +${rule.strengthAdd} 持续${rule.duration}s`);
+  }
+  if (rule.waveform) {
+    const waveformName = rule.waveform === "next" ? "下一个波形" : waveformLabel(rule.waveform);
+    parts.push(`${channel} ${waveformName}`);
+  }
+  return parts.join(" / ");
+}
+
+function waveformLabel(id) {
+  const waveform = waveformById.get(id);
+  return waveform ? waveform.name : id;
 }
 
 function setupEventListeners() {
@@ -153,6 +227,34 @@ function setupEventListeners() {
       const limit = ch === "A" ? state.effectiveLimitA : state.effectiveLimitB;
       const newVal = Math.max(0, Math.min(current + delta, limit));
       api.coyote.strength(ch, newVal);
+    };
+  });
+
+  $("#waveform-a").onchange = async () => {
+    await api.coyote.waveform({
+      action: "select",
+      channel: "A",
+      waveformId: $("#waveform-a").value,
+    });
+    await loadWaveforms();
+  };
+
+  $("#waveform-b").onchange = async () => {
+    await api.coyote.waveform({
+      action: "select",
+      channel: "B",
+      waveformId: $("#waveform-b").value,
+    });
+    await loadWaveforms();
+  };
+
+  $$("[data-wave-channel][data-wave-action]").forEach((btn) => {
+    btn.onclick = async () => {
+      await api.coyote.waveform({
+        action: btn.dataset.waveAction,
+        channel: btn.dataset.waveChannel,
+      });
+      await loadWaveforms();
     };
   });
 
@@ -197,16 +299,23 @@ function setupEventListeners() {
     const channel = $("#rule-channel").value;
     const strength = parseInt($("#rule-strength").value, 10);
     const duration = parseInt($("#rule-duration").value, 10);
+    const waveform = $("#rule-waveform").value;
 
-    if (!name || !strength || !duration) return;
+    if (!name) return;
+    if (Number.isNaN(strength) || Number.isNaN(duration)) return;
+    if (strength === 0 && !waveform) return;
+    if (strength > 0 && duration < 1) return;
+    if (strength === 0 && duration !== 0) return;
 
-    currentRules.push({
+    const rule = {
       giftName: name,
       coinType: "all",
       channel,
       strengthAdd: strength,
       duration,
-    });
+    };
+    if (waveform) rule.waveform = waveform;
+    currentRules.push(rule);
 
     await api.config.rules.set(currentRules);
     renderRules();
@@ -214,6 +323,7 @@ function setupEventListeners() {
     $("#rule-name").value = "";
     $("#rule-strength").value = "";
     $("#rule-duration").value = "";
+    $("#rule-waveform").value = "";
   };
 }
 
@@ -250,10 +360,12 @@ function setupWSEvents() {
     renderStrength();
   });
   ws.on("gift", addGiftLog);
+  ws.on("waveform:status", updateWaveformStatus);
   // 断线重连后重新拉取状态，避免错过断开期间的状态变化
   ws.on("reconnect", async () => {
     console.log("[Panel] Reconnected, refreshing state");
     qrLoaded = false;
+    await loadWaveforms();
     await loadConfig();
     await loadStatus();
   });

@@ -8,7 +8,7 @@ pub const ERR_NOT_PAIRED: &str = "402";
 pub const ERR_INVALID_JSON: &str = "403";
 pub const ERR_MESSAGE_TOO_LONG: &str = "405";
 
-const MAX_MESSAGE_LENGTH: usize = 1950;
+pub const MAX_MESSAGE_LENGTH: usize = 1950;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoyoteMessage {

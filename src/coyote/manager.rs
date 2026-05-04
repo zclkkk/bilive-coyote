@@ -1,9 +1,11 @@
 use crate::config::types::Channel;
 use crate::coyote::protocol::*;
 use crate::coyote::session::CoyoteServerState;
+use crate::coyote::waveform::{self, DEFAULT_WAVEFORM_ID};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
+use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,6 +29,22 @@ impl Default for CoyoteStatus {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WaveformStatus {
+    pub waveform_a: String,
+    pub waveform_b: String,
+}
+
+impl Default for WaveformStatus {
+    fn default() -> Self {
+        Self {
+            waveform_a: DEFAULT_WAVEFORM_ID.into(),
+            waveform_b: DEFAULT_WAVEFORM_ID.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum CoyoteCommand {
     SendStrength {
@@ -34,7 +52,17 @@ pub enum CoyoteCommand {
         mode: u8,
         value: u8,
     },
-    Clear {
+    SelectWaveform {
+        channel: Channel,
+        waveform_id: String,
+    },
+    NextWaveform {
+        channel: Channel,
+    },
+    EnsureWaveform {
+        channel: Channel,
+    },
+    StopWaveform {
         channel: Channel,
     },
 }
@@ -43,6 +71,7 @@ pub enum CoyoteCommand {
 pub struct CoyoteHandle {
     pub cmd_tx: mpsc::Sender<CoyoteCommand>,
     pub status: watch::Receiver<CoyoteStatus>,
+    pub waveform_status: watch::Receiver<WaveformStatus>,
     pub bridge_id: String,
     pub server_state: Arc<CoyoteServerState>,
 }
@@ -126,6 +155,8 @@ pub struct CoyoteManager {
     bridge_id: String,
     cmd_rx: mpsc::Receiver<CoyoteCommand>,
     shared: Arc<CoyoteSharedState>,
+    waveforms: WaveformChannels,
+    waveform_status_tx: watch::Sender<WaveformStatus>,
 }
 
 impl CoyoteManager {
@@ -133,6 +164,7 @@ impl CoyoteManager {
         let bridge_id = uuid::Uuid::new_v4().to_string();
         let (cmd_tx, cmd_rx) = mpsc::channel(32);
         let (status_tx, status_rx) = watch::channel(CoyoteStatus::default());
+        let (waveform_status_tx, waveform_status_rx) = watch::channel(WaveformStatus::default());
 
         let shared = Arc::new(CoyoteSharedState {
             paired: std::sync::Mutex::new(None),
@@ -153,11 +185,14 @@ impl CoyoteManager {
             bridge_id: bridge_id.clone(),
             cmd_rx,
             shared,
+            waveforms: WaveformChannels::default(),
+            waveform_status_tx,
         };
 
         let handle = CoyoteHandle {
             cmd_tx,
             status: status_rx,
+            waveform_status: waveform_status_rx,
             bridge_id,
             server_state,
         };
@@ -176,10 +211,23 @@ impl CoyoteManager {
                         Some(CoyoteCommand::SendStrength { channel, mode, value }) => {
                             self.send_strength(channel, mode, value).await;
                         }
-                        Some(CoyoteCommand::Clear { channel }) => {
-                            self.send_clear(channel).await;
+                        Some(CoyoteCommand::SelectWaveform { channel, waveform_id }) => {
+                            self.select_waveform(channel, waveform_id).await;
                         }
-                        None => break,
+                        Some(CoyoteCommand::NextWaveform { channel }) => {
+                            self.next_waveform(channel).await;
+                        }
+                        Some(CoyoteCommand::EnsureWaveform { channel }) => {
+                            self.ensure_waveform(channel).await;
+                        }
+                        Some(CoyoteCommand::StopWaveform { channel }) => {
+                            self.stop_waveform(channel).await;
+                        }
+                        None => {
+                            self.abort_waveform(Channel::A);
+                            self.abort_waveform(Channel::B);
+                            break;
+                        }
                     }
                 }
                 _ = heartbeat.tick() => {
@@ -206,6 +254,104 @@ impl CoyoteManager {
         self.send_app_command(&format!("clear-{ch_num}")).await;
     }
 
+    async fn select_waveform(&mut self, channel: Channel, waveform_id: String) {
+        if !waveform::is_waveform_id(&waveform_id) {
+            return;
+        }
+
+        let was_running = {
+            let state = self.waveforms.get_mut(channel);
+            if state.selected == waveform_id {
+                return;
+            }
+            state.selected = waveform_id;
+            state.running.is_some()
+        };
+
+        if was_running {
+            self.restart_waveform(channel).await;
+        } else {
+            self.emit_waveform_status();
+        }
+    }
+
+    async fn next_waveform(&mut self, channel: Channel) {
+        let next = waveform::next_waveform_id(&self.waveforms.get(channel).selected)
+            .expect("selected waveform id is valid")
+            .to_string();
+        self.select_waveform(channel, next).await;
+    }
+
+    async fn ensure_waveform(&mut self, channel: Channel) {
+        let should_start = {
+            let state = self.waveforms.get(channel);
+            state
+                .running
+                .as_ref()
+                .is_none_or(|running| running.waveform_id != state.selected)
+        };
+
+        if should_start {
+            self.restart_waveform(channel).await;
+        }
+    }
+
+    async fn stop_waveform(&mut self, channel: Channel) {
+        self.abort_waveform(channel);
+        self.send_clear(channel).await;
+        self.emit_waveform_status();
+    }
+
+    async fn restart_waveform(&mut self, channel: Channel) {
+        let had_running = self.abort_waveform(channel);
+        if had_running {
+            self.send_clear(channel).await;
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        }
+        self.start_waveform(channel);
+        self.emit_waveform_status();
+    }
+
+    fn abort_waveform(&mut self, channel: Channel) -> bool {
+        let state = self.waveforms.get_mut(channel);
+        if let Some(running) = state.running.take() {
+            running.handle.abort();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn start_waveform(&mut self, channel: Channel) {
+        let selected = self.waveforms.get(channel).selected.clone();
+        let preset = waveform::find_waveform(&selected).expect("selected waveform id is valid");
+        let command = preset.pulse_command(channel);
+        let interval = preset.repeat_interval();
+        let shared = self.shared.clone();
+        let bridge_id = self.bridge_id.clone();
+        let running_id = selected.clone();
+
+        let handle = tokio::spawn(async move {
+            loop {
+                let Some((tx, app_id)) = snapshot_paired(&shared) else {
+                    tokio::time::sleep(interval).await;
+                    continue;
+                };
+                let msg = build_message("msg", &bridge_id, &app_id, &command);
+                if tx.send(msg).await.is_err() {
+                    tokio::time::sleep(interval).await;
+                    continue;
+                }
+                tokio::time::sleep(interval).await;
+            }
+        });
+
+        self.waveforms.get_mut(channel).running = Some(RunningWaveform {
+            waveform_id: running_id,
+            handle,
+        });
+    }
+
     async fn send_heartbeat(&self) {
         let Some((tx, app_id)) = self.snapshot_paired() else {
             return;
@@ -223,11 +369,63 @@ impl CoyoteManager {
     }
 
     fn snapshot_paired(&self) -> Option<(mpsc::Sender<String>, String)> {
-        self.shared
-            .paired
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|p| (p.tx.clone(), p.client_id.clone()))
+        snapshot_paired(&self.shared)
     }
+
+    fn emit_waveform_status(&self) {
+        let _ = self.waveform_status_tx.send(WaveformStatus {
+            waveform_a: self.waveforms.a.selected.clone(),
+            waveform_b: self.waveforms.b.selected.clone(),
+        });
+    }
+}
+
+fn snapshot_paired(shared: &Arc<CoyoteSharedState>) -> Option<(mpsc::Sender<String>, String)> {
+    shared
+        .paired
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|p| (p.tx.clone(), p.client_id.clone()))
+}
+
+#[derive(Default)]
+struct WaveformChannels {
+    a: WaveformChannelState,
+    b: WaveformChannelState,
+}
+
+impl WaveformChannels {
+    fn get(&self, channel: Channel) -> &WaveformChannelState {
+        match channel {
+            Channel::A => &self.a,
+            Channel::B => &self.b,
+        }
+    }
+
+    fn get_mut(&mut self, channel: Channel) -> &mut WaveformChannelState {
+        match channel {
+            Channel::A => &mut self.a,
+            Channel::B => &mut self.b,
+        }
+    }
+}
+
+struct WaveformChannelState {
+    selected: String,
+    running: Option<RunningWaveform>,
+}
+
+impl Default for WaveformChannelState {
+    fn default() -> Self {
+        Self {
+            selected: DEFAULT_WAVEFORM_ID.into(),
+            running: None,
+        }
+    }
+}
+
+struct RunningWaveform {
+    waveform_id: String,
+    handle: JoinHandle<()>,
 }

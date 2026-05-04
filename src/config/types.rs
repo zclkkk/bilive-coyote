@@ -12,6 +12,7 @@ pub enum CoinType {
 pub enum RuleChannel {
     A,
     B,
+    #[serde(rename = "both", alias = "Both")]
     Both,
 }
 
@@ -31,6 +32,8 @@ pub struct GiftRule {
     pub channel: RuleChannel,
     pub strength_add: u8,
     pub duration: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub waveform: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,6 +175,7 @@ impl Default for AppConfig {
                     channel: RuleChannel::A,
                     strength_add: 5,
                     duration: 10,
+                    waveform: None,
                 },
                 GiftRule {
                     gift_name: "辣条".to_string(),
@@ -180,6 +184,7 @@ impl Default for AppConfig {
                     channel: RuleChannel::B,
                     strength_add: 3,
                     duration: 5,
+                    waveform: None,
                 },
             ],
             safety: SafetyConfig {

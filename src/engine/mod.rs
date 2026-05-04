@@ -2,8 +2,9 @@ pub mod gift_mapper;
 pub mod types;
 
 use crate::config::types::{Channel, GiftEvent, GiftRule};
+use crate::coyote::waveform::NEXT_WAVEFORM;
 use crate::coyote::{CoyoteCommand, CoyoteStatus};
-use crate::engine::gift_mapper::{apply_rule, build_gift_log, match_rule};
+use crate::engine::gift_mapper::{apply_rule, build_gift_log, match_rule, rule_channels};
 use crate::engine::types::{PanelEvent, StrengthSource, StrengthStatus};
 use tokio::sync::{broadcast, mpsc, watch};
 
@@ -183,9 +184,10 @@ impl StrengthEngine {
     }
 
     async fn handle_gift(&mut self, gift: GiftEvent) {
-        let rule = self.rules.iter().find(|r| match_rule(r, &gift));
+        let rule = self.rules.iter().find(|r| match_rule(r, &gift)).cloned();
         let strength_delta = if let Some(rule) = rule {
-            let (events, delta_str) = apply_rule(rule, &gift);
+            self.apply_waveform_rule(&rule).await;
+            let (events, delta_str) = apply_rule(&rule, &gift);
             for event in events {
                 let ch = event.channel;
                 let limit = self.effective_limit(ch);
@@ -202,6 +204,7 @@ impl StrengthEngine {
                         delta: actual_delta,
                     });
                     self.send_coyote_strength(ch, new_value).await;
+                    self.sync_coyote_waveform(ch, new_value).await;
                     self.emit_strength_event(ch, new_value, StrengthSource::Gift)
                         .await;
                 }
@@ -226,6 +229,7 @@ impl StrengthEngine {
         entry.baseline = value;
         entry.expiries.clear();
         self.send_coyote_strength(channel, value).await;
+        self.sync_coyote_waveform(channel, value).await;
         self.emit_strength_event(channel, value, StrengthSource::Manual)
             .await;
     }
@@ -246,7 +250,7 @@ impl StrengthEngine {
                 .await;
             let _ = self
                 .coyote_cmd_tx
-                .send(CoyoteCommand::Clear { channel: ch })
+                .send(CoyoteCommand::StopWaveform { channel: ch })
                 .await;
             self.emit_strength_event(ch, 0, StrengthSource::Emergency)
                 .await;
@@ -269,6 +273,10 @@ impl StrengthEngine {
                 entry.value = 0;
                 entry.baseline = 0;
                 entry.expiries.clear();
+                let _ = self
+                    .coyote_cmd_tx
+                    .send(CoyoteCommand::StopWaveform { channel: ch })
+                    .await;
             }
             self.app_limits = ChannelPair::splat(200);
         }
@@ -290,6 +298,7 @@ impl StrengthEngine {
         if app_value != value {
             self.send_coyote_strength(channel, value).await;
         }
+        self.sync_coyote_waveform(channel, value).await;
     }
 
     async fn run_decay(&mut self) {
@@ -315,6 +324,7 @@ impl StrengthEngine {
                 entry.value
             };
             self.send_coyote_strength(ch, new_value).await;
+            self.sync_coyote_waveform(ch, new_value).await;
             self.emit_strength_event(ch, new_value, StrengthSource::Decay)
                 .await;
         }
@@ -329,9 +339,27 @@ impl StrengthEngine {
                 entry.baseline = limit;
                 entry.expiries.clear();
                 self.send_coyote_strength(ch, limit).await;
+                self.sync_coyote_waveform(ch, limit).await;
             }
         }
         self.emit_status();
+    }
+
+    async fn apply_waveform_rule(&self, rule: &GiftRule) {
+        let Some(waveform) = rule.waveform.as_ref() else {
+            return;
+        };
+        for channel in rule_channels(rule.channel) {
+            let command = if waveform == NEXT_WAVEFORM {
+                CoyoteCommand::NextWaveform { channel }
+            } else {
+                CoyoteCommand::SelectWaveform {
+                    channel,
+                    waveform_id: waveform.clone(),
+                }
+            };
+            let _ = self.coyote_cmd_tx.send(command).await;
+        }
     }
 
     async fn send_coyote_strength(&self, channel: Channel, value: u8) {
@@ -343,6 +371,15 @@ impl StrengthEngine {
                 value,
             })
             .await;
+    }
+
+    async fn sync_coyote_waveform(&self, channel: Channel, value: u8) {
+        let command = if value > 0 {
+            CoyoteCommand::EnsureWaveform { channel }
+        } else {
+            CoyoteCommand::StopWaveform { channel }
+        };
+        let _ = self.coyote_cmd_tx.send(command).await;
     }
 
     async fn emit_strength_event(&self, channel: Channel, value: u8, source: StrengthSource) {
