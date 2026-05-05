@@ -61,7 +61,7 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
             }
         };
 
-        if coyote_msg.msg_type.as_str() != Some("bind") {
+        if coyote_msg.msg_type != "bind" {
             let resp = build_message(
                 "error",
                 &coyote_msg.client_id,

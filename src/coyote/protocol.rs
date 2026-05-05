@@ -14,7 +14,7 @@ pub const MAX_MESSAGE_LENGTH: usize = 1950;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoyoteMessage {
     #[serde(rename = "type")]
-    pub msg_type: serde_json::Value,
+    pub msg_type: String,
     pub client_id: String,
     pub target_id: String,
     pub message: String,
@@ -40,36 +40,29 @@ pub fn parse_message(data: &str) -> Result<CoyoteMessage, ParseError> {
         code: ERR_INVALID_JSON,
     })?;
 
-    let msg_type = map
-        .get("type")
-        .filter(|v| !v.is_null() && v.as_str().is_none_or(|s| !s.is_empty()));
-    let client_id = map
-        .get("clientId")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty());
-    let target_id = map
-        .get("targetId")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty());
-    let message = map
-        .get("message")
-        .filter(|v| !v.is_null() && v.as_str().is_none_or(|s| !s.is_empty()));
-
-    if msg_type.is_none() || client_id.is_none() || target_id.is_none() || message.is_none() {
-        return Err(ParseError {
-            code: ERR_INVALID_JSON,
-        });
-    }
+    let msg_type = required_string(map, "type")?;
+    let client_id = required_string(map, "clientId")?;
+    let target_id = required_string(map, "targetId")?;
+    let message = required_string(map, "message")?;
 
     Ok(CoyoteMessage {
-        msg_type: msg_type.unwrap().clone(),
-        client_id: client_id.unwrap().to_string(),
-        target_id: target_id.unwrap().to_string(),
-        message: match message.unwrap() {
-            serde_json::Value::String(s) => s.clone(),
-            other => other.to_string(),
-        },
+        msg_type: msg_type.to_string(),
+        client_id: client_id.to_string(),
+        target_id: target_id.to_string(),
+        message: message.to_string(),
     })
+}
+
+fn required_string<'a>(
+    map: &'a serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) -> Result<&'a str, ParseError> {
+    map.get(field)
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .ok_or(ParseError {
+            code: ERR_INVALID_JSON,
+        })
 }
 
 pub fn build_message(msg_type: &str, client_id: &str, target_id: &str, message: &str) -> String {
@@ -179,6 +172,15 @@ mod tests {
         let data = r#"{"type":"bind"}"#;
         let result = parse_message(data);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_message_rejects_non_string_fields() {
+        let data = r#"{"type":1,"clientId":"abc","targetId":"def","message":"hello"}"#;
+        assert!(parse_message(data).is_err());
+
+        let data = r#"{"type":"msg","clientId":"abc","targetId":"def","message":200}"#;
+        assert!(parse_message(data).is_err());
     }
 
     #[test]

@@ -458,7 +458,7 @@ mod tests {
 
         let msg = app_rx.recv().await.unwrap();
         let parsed = parse_message(&msg).unwrap();
-        assert_eq!(parsed.msg_type.as_str(), Some("heartbeat"));
+        assert_eq!(parsed.msg_type, "heartbeat");
         assert_eq!(parsed.client_id, "app-id");
         assert_eq!(parsed.target_id, manager.bridge_id);
         assert_eq!(parsed.message, ERR_SUCCESS);
