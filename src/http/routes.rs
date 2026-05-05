@@ -111,13 +111,7 @@ pub async fn coyote_status(State(state): State<AppState>) -> Result<Json<Value>,
 pub async fn coyote_qrcode(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
     let cfg = state.config.lock().await;
     let config = cfg.get();
-    let host = if config.server.host == "0.0.0.0" {
-        local_ip_address::local_ip()
-            .map(|ip| ip.to_string())
-            .unwrap_or_else(|_| "127.0.0.1".into())
-    } else {
-        config.server.host.clone()
-    };
+    let host = resolve_qrcode_host(&config.server.host)?;
     let ws_port = config.coyote.ws_port;
     drop(cfg);
 
@@ -128,6 +122,30 @@ pub async fn coyote_qrcode(State(state): State<AppState>) -> Result<Json<Value>,
     match generate_qr_data_url(&qr_content) {
         Ok(qr) => Ok(Json(serde_json::json!({ "qrcode": qr }))),
         Err(_) => Err(ApiError::NotFound("QR code unavailable".into())),
+    }
+}
+
+fn resolve_qrcode_host(configured_host: &str) -> Result<String, ApiError> {
+    resolve_qrcode_host_with(configured_host, || {
+        local_ip_address::local_ip()
+            .map(|ip| ip.to_string())
+            .map_err(|e| e.to_string())
+    })
+}
+
+fn resolve_qrcode_host_with<F, E>(configured_host: &str, local_ip: F) -> Result<String, ApiError>
+where
+    F: FnOnce() -> Result<String, E>,
+    E: std::fmt::Display,
+{
+    if configured_host == "0.0.0.0" {
+        local_ip().map_err(|e| {
+            ApiError::Internal(format!(
+                "Cannot determine local IP; set server.host explicitly: {e}"
+            ))
+        })
+    } else {
+        Ok(configured_host.to_string())
     }
 }
 
@@ -286,4 +304,30 @@ pub async fn put_rules(
         .send(StrengthCommand::RulesUpdate(rules))
         .await;
     Ok(Json(SuccessResponse { success: true }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn qrcode_host_uses_explicit_host() {
+        let host = resolve_qrcode_host_with("192.0.2.1", || -> Result<String, &'static str> {
+            panic!("local ip should not be used")
+        })
+        .unwrap();
+        assert_eq!(host, "192.0.2.1");
+    }
+
+    #[test]
+    fn qrcode_host_rejects_missing_local_ip() {
+        let err = resolve_qrcode_host_with("0.0.0.0", || -> Result<String, &'static str> {
+            Err("missing")
+        })
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Cannot determine local IP; set server.host explicitly: missing"
+        );
+    }
 }
