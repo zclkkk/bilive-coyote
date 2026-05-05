@@ -1,6 +1,6 @@
 [package]
 name = "bilive-coyote"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Bilibili live gift to DG-LAB Coyote strength LAN bridge"
 license = "Parity-7.0.0"
