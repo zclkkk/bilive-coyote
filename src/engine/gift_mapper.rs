@@ -27,7 +27,6 @@ pub fn apply_rule(rule: &GiftRule, gift: &GiftEvent) -> (Vec<StrengthChangeEvent
         .map(|&ch| StrengthChangeEvent {
             channel: ch,
             delta: delta_i32,
-            absolute: None,
             source: StrengthSource::Gift,
             gift_name: Some(gift.gift_name.clone()),
             uname: Some(gift.uname.clone()),

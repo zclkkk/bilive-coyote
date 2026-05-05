@@ -16,8 +16,6 @@ pub struct StrengthStatus {
 pub struct StrengthChangeEvent {
     pub channel: Channel,
     pub delta: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub absolute: Option<u8>,
     pub source: StrengthSource,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gift_name: Option<String>,
