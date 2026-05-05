@@ -40,6 +40,8 @@ impl App {
         let (coyote_manager, coyote_handle) = CoyoteManager::new();
         let mut waveform_status_rx = coyote_handle.waveform_status.clone();
         let waveform_panel_tx = panel_tx.clone();
+        let mut coyote_feedback_rx = coyote_handle.feedback_tx.subscribe();
+        let feedback_panel_tx = panel_tx.clone();
 
         let (strength_engine, strength_handle) = StrengthEngine::new(
             cfg_snapshot.rules.clone(),
@@ -56,6 +58,14 @@ impl App {
         tokio::spawn(bilibili_manager.run());
         tokio::spawn(coyote_manager.run());
         tokio::spawn(strength_engine.run());
+        tokio::spawn(async move {
+            while let Ok(feedback) = coyote_feedback_rx.recv().await {
+                let _ = feedback_panel_tx.send(PanelEvent {
+                    event_type: "coyote:feedback".into(),
+                    data: serde_json::to_value(feedback).expect("coyote feedback serializes"),
+                });
+            }
+        });
         tokio::spawn(async move {
             loop {
                 if waveform_status_rx.changed().await.is_err() {

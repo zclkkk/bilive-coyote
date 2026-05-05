@@ -1,3 +1,4 @@
+use crate::config::types::Channel;
 use serde::{Deserialize, Serialize};
 
 pub const ERR_SUCCESS: &str = "200";
@@ -89,6 +90,14 @@ pub struct StrengthFeedback {
     pub limit_b: u8,
 }
 
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoyoteFeedback {
+    pub channel: Channel,
+    pub button: u8,
+    pub raw_index: u8,
+}
+
 pub fn parse_strength_feedback(message: &str) -> Option<StrengthFeedback> {
     let rest = message.strip_prefix("strength-")?;
     let mut parts = rest.split('+');
@@ -104,6 +113,26 @@ pub fn parse_strength_feedback(message: &str) -> Option<StrengthFeedback> {
         b,
         limit_a,
         limit_b,
+    })
+}
+
+pub fn parse_feedback(message: &str) -> Option<CoyoteFeedback> {
+    let rest = message.strip_prefix("feedback-")?;
+    let bytes = rest.as_bytes();
+    if bytes.len() != 1 || !bytes[0].is_ascii_digit() {
+        return None;
+    }
+
+    let raw_index = bytes[0] - b'0';
+    let channel = if raw_index < 5 {
+        Channel::A
+    } else {
+        Channel::B
+    };
+    Some(CoyoteFeedback {
+        channel,
+        button: raw_index % 5,
+        raw_index,
     })
 }
 
@@ -173,5 +202,38 @@ mod tests {
         assert!(parse_strength_feedback("strength-10+20").is_none());
         assert!(parse_strength_feedback("strength-+10+20+80+90").is_none());
         assert!(parse_strength_feedback("strength-10+20+80+256").is_none());
+    }
+
+    #[test]
+    fn test_parse_feedback() {
+        let a0 = parse_feedback("feedback-0").unwrap();
+        assert_eq!(a0.channel, Channel::A);
+        assert_eq!(a0.button, 0);
+        assert_eq!(a0.raw_index, 0);
+
+        let a4 = parse_feedback("feedback-4").unwrap();
+        assert_eq!(a4.channel, Channel::A);
+        assert_eq!(a4.button, 4);
+        assert_eq!(a4.raw_index, 4);
+
+        let b0 = parse_feedback("feedback-5").unwrap();
+        assert_eq!(b0.channel, Channel::B);
+        assert_eq!(b0.button, 0);
+        assert_eq!(b0.raw_index, 5);
+
+        let b4 = parse_feedback("feedback-9").unwrap();
+        assert_eq!(b4.channel, Channel::B);
+        assert_eq!(b4.button, 4);
+        assert_eq!(b4.raw_index, 9);
+    }
+
+    #[test]
+    fn test_parse_feedback_invalid() {
+        assert!(parse_feedback("feedback-").is_none());
+        assert!(parse_feedback("feedback-10").is_none());
+        assert!(parse_feedback("feedback-x").is_none());
+        assert!(parse_feedback(" feedback-1").is_none());
+        assert!(parse_feedback("feedback-1 ").is_none());
+        assert!(parse_feedback("xfeedback-1").is_none());
     }
 }

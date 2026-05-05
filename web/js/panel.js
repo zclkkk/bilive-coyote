@@ -23,6 +23,7 @@ const waveformState = {
   selectedA: "breath",
   selectedB: "breath",
 };
+const feedbackLabels = ["○", "△", "□", "☆", "⬡"];
 let qrLoaded = false;
 
 async function init() {
@@ -361,6 +362,7 @@ function setupWSEvents() {
   });
   ws.on("gift", addGiftLog);
   ws.on("waveform:status", updateWaveformStatus);
+  ws.on("coyote:feedback", updateCoyoteFeedback);
   // 断线重连后重新拉取状态，避免错过断开期间的状态变化
   ws.on("reconnect", async () => {
     console.log("[Panel] Reconnected, refreshing state");
@@ -411,6 +413,7 @@ function updateCoyoteStatus(data) {
     if (elA) elA.textContent = "--";
     const elB = $("#app-limit-b");
     if (elB) elB.textContent = "--";
+    $("#coyote-feedback").textContent = "--";
     renderStrength();
     if (!qrLoaded) loadQRCode();
   }
@@ -419,6 +422,10 @@ function updateCoyoteStatus(data) {
 function renderPairDetail() {
   const elPort = $("#pair-ws-port");
   if (elPort) elPort.textContent = currentConfig.coyote?.wsPort ?? 9999;
+}
+
+function updateCoyoteFeedback(data) {
+  $("#coyote-feedback").textContent = `${data.channel} ${feedbackLabels[data.button]}`;
 }
 
 function renderStrength() {

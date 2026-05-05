@@ -4,7 +4,7 @@ use crate::coyote::session::CoyoteServerState;
 use crate::coyote::waveform::{self, DEFAULT_WAVEFORM_ID};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{broadcast, mpsc, watch};
 use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,6 +72,7 @@ pub struct CoyoteHandle {
     pub cmd_tx: mpsc::Sender<CoyoteCommand>,
     pub status: watch::Receiver<CoyoteStatus>,
     pub waveform_status: watch::Receiver<WaveformStatus>,
+    pub feedback_tx: broadcast::Sender<CoyoteFeedback>,
     pub bridge_id: String,
     pub server_state: Arc<CoyoteServerState>,
 }
@@ -90,6 +91,7 @@ pub struct CoyoteSharedHandle {
     shared: Arc<CoyoteSharedState>,
     bridge_id: String,
     status_tx: watch::Sender<CoyoteStatus>,
+    feedback_tx: broadcast::Sender<CoyoteFeedback>,
 }
 
 impl CoyoteSharedHandle {
@@ -138,6 +140,11 @@ impl CoyoteSharedHandle {
                 limit_b: fb.limit_b,
             };
             let _ = self.status_tx.send(status);
+            return;
+        }
+
+        if let Some(feedback) = parse_feedback(message) {
+            let _ = self.feedback_tx.send(feedback);
         }
     }
 
@@ -165,6 +172,7 @@ impl CoyoteManager {
         let (cmd_tx, cmd_rx) = mpsc::channel(32);
         let (status_tx, status_rx) = watch::channel(CoyoteStatus::default());
         let (waveform_status_tx, waveform_status_rx) = watch::channel(WaveformStatus::default());
+        let (feedback_tx, _) = broadcast::channel(32);
 
         let shared = Arc::new(CoyoteSharedState {
             paired: std::sync::Mutex::new(None),
@@ -174,6 +182,7 @@ impl CoyoteManager {
             shared: shared.clone(),
             bridge_id: bridge_id.clone(),
             status_tx,
+            feedback_tx: feedback_tx.clone(),
         });
 
         let server_state = Arc::new(CoyoteServerState {
@@ -193,6 +202,7 @@ impl CoyoteManager {
             cmd_tx,
             status: status_rx,
             waveform_status: waveform_status_rx,
+            feedback_tx,
             bridge_id,
             server_state,
         };

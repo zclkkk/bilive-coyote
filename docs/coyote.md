@@ -64,6 +64,10 @@ strength-A强度+B强度+A上限+B上限
 strength-11+7+100+35
 ```
 
+## APP 反馈
+
+APP 可能发送 `feedback-0` 到 `feedback-9`。项目将其作为瞬时面板事件 `coyote:feedback` 转发，不改变强度。
+
 ## 波形指令
 
 DG-LAB APP Socket 中，强度和波形是两类指令：

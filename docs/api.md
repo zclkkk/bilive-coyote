@@ -205,6 +205,7 @@ Broadcast：
 | --- | --- |
 | `bilibili:status` | B 站连接状态 |
 | `coyote:status` | Coyote 配对和强度状态 |
+| `coyote:feedback` | APP 反馈按钮事件 |
 | `strength` | 本地强度变化 |
 | `waveform:status` | 当前波形选择变化 |
 | `gift` | 礼物日志 |
