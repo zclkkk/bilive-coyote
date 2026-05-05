@@ -80,7 +80,7 @@ pub async fn bilibili_stop(
     state
         .bilibili
         .cmd_tx
-        .send(BilibiliCommand::Stop)
+        .send(BilibiliCommand::Stop(None))
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
     Ok(Json(SuccessResponse { success: true }))

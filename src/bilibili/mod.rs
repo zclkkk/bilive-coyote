@@ -55,7 +55,7 @@ pub struct SourceStartResult {
 #[derive(Debug)]
 pub enum BilibiliCommand {
     Start(BilibiliStart, oneshot::Sender<Result<(), String>>),
-    Stop,
+    Stop(Option<oneshot::Sender<()>>),
 }
 
 #[derive(Clone)]
@@ -120,8 +120,11 @@ impl BilibiliManager {
                         Some(BilibiliCommand::Start(start, reply)) => {
                             self.handle_start(start, reply).await;
                         }
-                        Some(BilibiliCommand::Stop) => {
+                        Some(BilibiliCommand::Stop(reply)) => {
                             self.handle_stop().await;
+                            if let Some(reply) = reply {
+                                let _ = reply.send(());
+                            }
                         }
                         None => break,
                     }

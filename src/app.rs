@@ -1,4 +1,4 @@
-use crate::bilibili::{BilibiliHandle, BilibiliManager};
+use crate::bilibili::{BilibiliCommand, BilibiliHandle, BilibiliManager};
 use crate::config::types::GiftEvent;
 use crate::config::{ConfigHandle, ConfigStore, RuntimeStateStore};
 use crate::coyote::{CoyoteHandle, CoyoteManager};
@@ -7,7 +7,7 @@ use crate::engine::{StrengthEngine, StrengthHandle};
 use crate::http;
 use crate::http::routes::AppState;
 use axum::routing::get;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, oneshot};
 use tracing::info;
 
 pub struct App {
@@ -146,8 +146,25 @@ impl App {
         tokio::select! {
             r = axum::serve(listener, main_app) => r?,
             r = axum::serve(coyote_listener, coyote_app) => r?,
+            _ = tokio::signal::ctrl_c() => {
+                self.shutdown_bilibili().await;
+            }
         }
 
         Ok(())
+    }
+
+    async fn shutdown_bilibili(&self) {
+        let (tx, rx) = oneshot::channel();
+        if self
+            .bilibili_handle
+            .cmd_tx
+            .send(BilibiliCommand::Stop(Some(tx)))
+            .await
+            .is_err()
+        {
+            return;
+        }
+        let _ = rx.await;
     }
 }
