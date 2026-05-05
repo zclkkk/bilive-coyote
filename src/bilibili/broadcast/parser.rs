@@ -37,23 +37,19 @@ pub fn parse_broadcast_gift(message: &serde_json::Value) -> Option<GiftEvent> {
     }
 
     let d = msg.data?;
-    if d.giftId.is_none() && d.giftName.is_none() {
-        return None;
-    }
+    let gift_name = d.giftName.filter(|s| !s.is_empty())?;
+    let coin_type = d.coin_type.filter(|s| !s.is_empty())?;
+    let uname = d.uname.filter(|s| !s.is_empty())?;
+
     Some(GiftEvent {
-        gift_id: d.giftId.unwrap_or(0),
-        gift_name: d.giftName.unwrap_or_default(),
-        coin_type: d.coin_type.unwrap_or_else(|| "silver".into()),
-        total_coin: d.price.unwrap_or(1),
-        num: d.num.unwrap_or(1),
-        uid: d.uid.unwrap_or(0),
-        uname: d.uname.unwrap_or_default(),
-        timestamp: d.timestamp.unwrap_or_else(|| {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-        }),
+        gift_id: d.giftId?,
+        gift_name,
+        coin_type,
+        total_coin: d.price?,
+        num: d.num?,
+        uid: d.uid?,
+        uname,
+        timestamp: d.timestamp?,
     })
 }
 
@@ -97,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_gift_partial_data() {
+    fn test_parse_gift_rejects_partial_data() {
         let msg = serde_json::json!({
             "cmd": "SEND_GIFT",
             "data": {
@@ -105,12 +101,6 @@ mod tests {
                 "giftName": "test"
             }
         });
-        let gift = parse_broadcast_gift(&msg).unwrap();
-        assert_eq!(gift.gift_id, 123);
-        assert_eq!(gift.gift_name, "test");
-        assert_eq!(gift.coin_type, "silver");
-        assert_eq!(gift.total_coin, 1);
-        assert_eq!(gift.num, 1);
-        assert!(gift.timestamp > 0);
+        assert!(parse_broadcast_gift(&msg).is_none());
     }
 }

@@ -34,24 +34,19 @@ pub fn parse_open_platform_gift(message: &serde_json::Value) -> Option<GiftEvent
     }
 
     let data = msg.data?;
+    let gift_name = data.gift_name.or(data.giftName).filter(|s| !s.is_empty())?;
+    let uname = data.uname.or(data.username).filter(|s| !s.is_empty())?;
+    let paid = data.paid?;
+
     Some(GiftEvent {
-        gift_id: data.gift_id.or(data.giftId).unwrap_or(0),
-        gift_name: data.gift_name.or(data.giftName).unwrap_or_default(),
-        coin_type: if data.paid == Some(true) {
-            "gold".into()
-        } else {
-            "silver".into()
-        },
-        total_coin: data.price.or(data.total_coin).unwrap_or(0),
-        num: data.gift_num.or(data.num).unwrap_or(1),
-        uid: data.uid.unwrap_or(0),
-        uname: data.uname.or(data.username).unwrap_or_default(),
-        timestamp: data.timestamp.unwrap_or_else(|| {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-        }),
+        gift_id: data.gift_id.or(data.giftId)?,
+        gift_name,
+        coin_type: if paid { "gold".into() } else { "silver".into() },
+        total_coin: data.price.or(data.total_coin)?,
+        num: data.gift_num.or(data.num)?,
+        uid: data.uid?,
+        uname,
+        timestamp: data.timestamp?,
     })
 }
 
@@ -106,7 +101,9 @@ mod tests {
                 "paid": false,
                 "total_coin": 50,
                 "gift_num": 3,
-                "username": "altuser"
+                "uid": 456,
+                "username": "altuser",
+                "timestamp": 1700000000
             }
         });
         let gift = parse_open_platform_gift(&msg).unwrap();
@@ -116,5 +113,17 @@ mod tests {
         assert_eq!(gift.total_coin, 50);
         assert_eq!(gift.num, 3);
         assert_eq!(gift.uname, "altuser");
+    }
+
+    #[test]
+    fn test_parse_gift_rejects_partial_data() {
+        let msg = serde_json::json!({
+            "cmd": "LIVE_OPEN_PLATFORM_SEND_GIFT",
+            "data": {
+                "giftId": 999,
+                "giftName": "alt"
+            }
+        });
+        assert!(parse_open_platform_gift(&msg).is_none());
     }
 }
