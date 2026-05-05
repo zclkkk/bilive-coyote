@@ -7,7 +7,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async_tls_with_config, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async_tls_with_config};
 use tracing::{error, info, warn};
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(20);

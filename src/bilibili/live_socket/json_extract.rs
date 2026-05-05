@@ -12,10 +12,10 @@ pub fn extract_json_messages(body: &[u8]) -> Vec<serde_json::Value> {
             continue;
         };
         let json_str = &chunk[json_start..];
-        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
-            if parsed.is_object() {
-                messages.push(parsed);
-            }
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str)
+            && parsed.is_object()
+        {
+            messages.push(parsed);
         }
     }
     messages

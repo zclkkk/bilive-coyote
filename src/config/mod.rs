@@ -32,5 +32,5 @@ impl ConfigHandle {
 }
 
 pub use validation::{
-    parse_bilibili_start, parse_manual_strength, BilibiliStartInput, ValidationError,
+    BilibiliStartInput, ValidationError, parse_bilibili_start, parse_manual_strength,
 };

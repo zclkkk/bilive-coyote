@@ -2,10 +2,10 @@ use crate::config::types::{Channel, CoinType, GiftEvent, GiftRule, RuleChannel};
 use crate::engine::types::{GiftLogEvent, StrengthChangeEvent, StrengthSource};
 
 pub fn match_rule(rule: &GiftRule, gift: &GiftEvent) -> bool {
-    if let Some(rule_gift_id) = rule.gift_id {
-        if gift.gift_id != rule_gift_id {
-            return false;
-        }
+    if let Some(rule_gift_id) = rule.gift_id
+        && gift.gift_id != rule_gift_id
+    {
+        return false;
     }
     if gift.gift_name != rule.gift_name {
         return false;

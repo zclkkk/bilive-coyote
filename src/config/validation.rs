@@ -1,5 +1,5 @@
 use crate::config::types::{AppConfig, BilibiliSourceType, Channel, GiftRule};
-use crate::coyote::waveform::{is_waveform_id, NEXT_WAVEFORM};
+use crate::coyote::waveform::{NEXT_WAVEFORM, is_waveform_id};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -72,10 +72,10 @@ fn validate_rule(rule: &GiftRule, index: usize) -> Result<(), ValidationError> {
     } else if rule.duration < 1 {
         return Err(err(format!("rules[{index}].duration must be >= 1")));
     }
-    if let Some(gift_id) = rule.gift_id {
-        if gift_id < 1 {
-            return Err(err(format!("rules[{index}].giftId must be >= 1")));
-        }
+    if let Some(gift_id) = rule.gift_id
+        && gift_id < 1
+    {
+        return Err(err(format!("rules[{index}].giftId must be >= 1")));
     }
     if let Some(waveform) = rule.waveform.as_ref() {
         if waveform.trim() != waveform || waveform.is_empty() {

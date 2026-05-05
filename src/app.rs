@@ -59,7 +59,12 @@ impl App {
         tokio::spawn(coyote_manager.run());
         tokio::spawn(strength_engine.run());
         tokio::spawn(async move {
-            while let Ok(feedback) = coyote_feedback_rx.recv().await {
+            loop {
+                let received = coyote_feedback_rx.recv().await;
+                let feedback = match received {
+                    Ok(feedback) => feedback,
+                    Err(_) => break,
+                };
                 let _ = feedback_panel_tx.send(PanelEvent {
                     event_type: "coyote:feedback".into(),
                     data: serde_json::to_value(feedback).expect("coyote feedback serializes"),

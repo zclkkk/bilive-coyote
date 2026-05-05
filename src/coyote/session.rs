@@ -42,7 +42,12 @@ async fn handle_coyote_socket(socket: WebSocket, state: Arc<CoyoteServerState>) 
         }
     });
 
-    while let Some(Ok(msg)) = ws_stream.next().await {
+    loop {
+        let next_msg = ws_stream.next().await;
+        let msg = match next_msg {
+            Some(Ok(msg)) => msg,
+            _ => break,
+        };
         let text = match msg {
             Message::Text(text) => text,
             _ => {

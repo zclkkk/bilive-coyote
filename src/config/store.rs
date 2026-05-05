@@ -1,5 +1,5 @@
 use crate::config::types::{AppConfig, GiftRule, RuntimeState};
-use crate::config::validation::{validate_app_config, validate_rules, ValidationError};
+use crate::config::validation::{ValidationError, validate_app_config, validate_rules};
 use std::path::PathBuf;
 use tokio::sync::watch;
 use tracing::error;

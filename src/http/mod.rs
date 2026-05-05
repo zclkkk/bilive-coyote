@@ -4,8 +4,8 @@ pub mod static_files;
 
 use crate::http::routes::AppState;
 use crate::http::static_files::static_handler;
-use axum::routing::{get, post, put};
 use axum::Router;
+use axum::routing::{get, post, put};
 
 pub fn create_router(state: AppState) -> Router {
     Router::new()
@@ -58,7 +58,12 @@ async fn handle_panel_socket(
         }
     });
 
-    while let Some(Ok(msg)) = ws_stream.next().await {
+    loop {
+        let next_msg = ws_stream.next().await;
+        let msg = match next_msg {
+            Some(Ok(msg)) => msg,
+            _ => break,
+        };
         if let axum::extract::ws::Message::Close(_) = msg {
             break;
         }

@@ -324,7 +324,8 @@ impl CoyoteManager {
 
     fn abort_waveform(&mut self, channel: Channel) -> bool {
         let state = self.waveforms.get_mut(channel);
-        if let Some(running) = state.running.take() {
+        let running = state.running.take();
+        if let Some(running) = running {
             running.handle.abort();
             true
         } else {

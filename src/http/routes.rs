@@ -2,14 +2,14 @@ use tokio::sync::oneshot;
 
 use crate::bilibili::{BilibiliCommand, BilibiliHandle, BilibiliStart};
 use crate::config::types::Channel;
-use crate::config::{parse_bilibili_start, parse_manual_strength, ConfigHandle};
+use crate::config::{ConfigHandle, parse_bilibili_start, parse_manual_strength};
 use crate::coyote::waveform;
-use crate::coyote::{generate_qr_data_url, CoyoteCommand, CoyoteHandle};
-use crate::engine::types::{PanelEvent, StrengthStatus};
+use crate::coyote::{CoyoteCommand, CoyoteHandle, generate_qr_data_url};
 use crate::engine::StrengthCommand;
+use crate::engine::types::{PanelEvent, StrengthStatus};
 use crate::http::error::ApiError;
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::broadcast;
