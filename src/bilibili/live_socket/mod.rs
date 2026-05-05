@@ -150,10 +150,10 @@ async fn handle_connection(
         tokio::select! {
             msg = ws_stream.next() => {
                 match msg {
-                    Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(data))) => {
-                        if handle_data(&data, opts).await {
-                            auth_success = true;
-                        }
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Binary(data)))
+                        if handle_data(&data, opts).await =>
+                    {
+                        auth_success = true;
                     }
                     Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => {
                         break;
