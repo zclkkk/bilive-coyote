@@ -82,6 +82,10 @@ pub fn build_message(msg_type: &str, client_id: &str, target_id: &str, message: 
     .to_string()
 }
 
+pub fn build_heartbeat(recipient_id: &str, paired_id: &str) -> String {
+    build_message("heartbeat", recipient_id, paired_id, ERR_SUCCESS)
+}
+
 #[derive(Debug, Clone)]
 pub struct StrengthFeedback {
     pub a: u8,
@@ -185,6 +189,16 @@ mod tests {
         assert_eq!(parsed["clientId"], "abc");
         assert_eq!(parsed["targetId"], "def");
         assert_eq!(parsed["message"], "200");
+    }
+
+    #[test]
+    fn test_build_heartbeat() {
+        let msg = build_heartbeat("app", "bridge");
+        let parsed: serde_json::Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["type"], "heartbeat");
+        assert_eq!(parsed["clientId"], "app");
+        assert_eq!(parsed["targetId"], "bridge");
+        assert_eq!(parsed["message"], ERR_SUCCESS);
     }
 
     #[test]

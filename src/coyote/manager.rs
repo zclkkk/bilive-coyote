@@ -366,7 +366,7 @@ impl CoyoteManager {
         let Some((tx, app_id)) = self.snapshot_paired() else {
             return;
         };
-        let msg = build_message("heartbeat", &app_id, &self.bridge_id, ERR_SUCCESS);
+        let msg = build_heartbeat(&app_id, &self.bridge_id);
         let _ = tx.send(msg).await;
     }
 
@@ -438,4 +438,29 @@ impl Default for WaveformChannelState {
 struct RunningWaveform {
     waveform_id: String,
     handle: JoinHandle<()>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn heartbeat_uses_recipient_as_client_id() {
+        let (manager, handle) = CoyoteManager::new();
+        let (app_tx, mut app_rx) = mpsc::channel(1);
+        let (close_tx, _) = watch::channel(false);
+
+        handle
+            .server_state
+            .shared
+            .register_app("app-id".into(), app_tx, close_tx);
+        manager.send_heartbeat().await;
+
+        let msg = app_rx.recv().await.unwrap();
+        let parsed = parse_message(&msg).unwrap();
+        assert_eq!(parsed.msg_type.as_str(), Some("heartbeat"));
+        assert_eq!(parsed.client_id, "app-id");
+        assert_eq!(parsed.target_id, manager.bridge_id);
+        assert_eq!(parsed.message, ERR_SUCCESS);
+    }
 }
