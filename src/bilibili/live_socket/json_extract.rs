@@ -6,14 +6,8 @@ pub fn extract_json_messages(body: &[u8]) -> Vec<serde_json::Value> {
         .filter(|s| !s.is_empty())
         .collect();
 
-    let source = if chunks.is_empty() {
-        vec![text.as_ref()]
-    } else {
-        chunks
-    };
-
     let mut messages = Vec::new();
-    for chunk in source {
+    for chunk in chunks {
         let Some(json_start) = chunk.find('{') else {
             continue;
         };
