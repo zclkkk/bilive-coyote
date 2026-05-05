@@ -13,7 +13,7 @@ pub fn sign_open_platform_request(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let nonce = timestamp + (rand::random::<u64>() % 100000);
+    let nonce = rand::random::<u64>();
 
     let params_str = serde_json::to_string(params).unwrap_or_default();
     let mut hasher = Md5::new();
