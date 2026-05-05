@@ -12,6 +12,7 @@ pub struct BroadcastSource {
     config: ConfigHandle,
     gift_tx: mpsc::Sender<GiftEvent>,
     cancel: CancellationToken,
+    http: reqwest::Client,
 }
 
 impl BroadcastSource {
@@ -20,6 +21,7 @@ impl BroadcastSource {
             config,
             gift_tx,
             cancel: CancellationToken::new(),
+            http: reqwest::Client::new(),
         }
     }
 
@@ -40,7 +42,7 @@ impl BroadcastSource {
             return Err("roomId required".into());
         }
 
-        let (key, urls, long_room_id) = fetch_danmu_info(requested).await?;
+        let (key, urls, long_room_id) = fetch_danmu_info(&self.http, requested).await?;
 
         let gift_tx = self.gift_tx.clone();
 

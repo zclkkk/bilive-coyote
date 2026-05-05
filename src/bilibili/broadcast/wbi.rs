@@ -96,10 +96,10 @@ struct HostEntry {
 }
 
 async fn api_get<T: for<'de> serde::Deserialize<'de>>(
+    client: &reqwest::Client,
     url: &str,
     headers: Vec<(&str, &str)>,
 ) -> Result<T, reqwest::Error> {
-    let client = reqwest::Client::new();
     let mut req = client.get(url).header("User-Agent", UA);
     for (key, value) in headers {
         req = req.header(key, value);
@@ -107,14 +107,19 @@ async fn api_get<T: for<'de> serde::Deserialize<'de>>(
     req.send().await?.json().await
 }
 
-async fn get_buvid3() -> Result<String, reqwest::Error> {
-    let resp: BiliResponse<SpiData> =
-        api_get("https://api.bilibili.com/x/frontend/finger/spi", vec![]).await?;
+async fn get_buvid3(client: &reqwest::Client) -> Result<String, reqwest::Error> {
+    let resp: BiliResponse<SpiData> = api_get(
+        client,
+        "https://api.bilibili.com/x/frontend/finger/spi",
+        vec![],
+    )
+    .await?;
     Ok(resp.data.map(|d| d.b_3).unwrap_or_default())
 }
 
-async fn resolve_room_id(room_id: u64) -> Result<u64, reqwest::Error> {
+async fn resolve_room_id(client: &reqwest::Client, room_id: u64) -> Result<u64, reqwest::Error> {
     let resp: BiliResponse<RoomInitData> = api_get(
+        client,
         &format!("https://api.live.bilibili.com/room/v1/Room/mobileRoomInit?id={room_id}"),
         vec![],
     )
@@ -122,15 +127,19 @@ async fn resolve_room_id(room_id: u64) -> Result<u64, reqwest::Error> {
     Ok(resp.data.map(|d| d.room_id).unwrap_or(room_id))
 }
 
-pub async fn fetch_danmu_info(room_id: u64) -> Result<(String, Vec<String>, u64), String> {
-    let buvid3 = get_buvid3()
+pub async fn fetch_danmu_info(
+    client: &reqwest::Client,
+    room_id: u64,
+) -> Result<(String, Vec<String>, u64), String> {
+    let buvid3 = get_buvid3(client)
         .await
         .map_err(|e| format!("getBuvid3 failed: {e}"))?;
-    let long_room_id = resolve_room_id(room_id)
+    let long_room_id = resolve_room_id(client, room_id)
         .await
         .map_err(|e| format!("resolveRoomId failed: {e}"))?;
 
     let nav: BiliResponse<NavData> = api_get(
+        client,
         "https://api.bilibili.com/x/web-interface/nav",
         vec![("Cookie", &format!("buvid3={buvid3}"))],
     )
@@ -156,6 +165,7 @@ pub async fn fetch_danmu_info(room_id: u64) -> Result<(String, Vec<String>, u64)
 
     let signed = sign_wbi(&serde_json::json!({"id": long_room_id}), &mixin_key);
     let danmu: BiliResponse<DanmuInfoData> = api_get(
+        client,
         &format!("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo?{signed}"),
         vec![
             ("Referer", "https://live.bilibili.com/"),
