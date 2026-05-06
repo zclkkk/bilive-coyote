@@ -252,6 +252,8 @@ pub async fn put_config(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> Result<Json<SuccessResponse>, ApiError> {
+    reject_runtime_only_config(&body)?;
+
     let has_safety = body.get("safety").is_some();
     let has_rules = body.get("rules").is_some();
     {
@@ -281,6 +283,15 @@ pub async fn put_config(
     }
 
     Ok(Json(SuccessResponse { success: true }))
+}
+
+fn reject_runtime_only_config(body: &Value) -> Result<(), ApiError> {
+    if body.get("server").is_some() || body.get("coyote").is_some() {
+        return Err(ApiError::Validation(
+            "server/coyote config changes require restart".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub async fn get_rules(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
@@ -328,6 +339,25 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "Cannot determine local IP; set server.host explicitly: missing"
+        );
+    }
+
+    #[test]
+    fn config_rejects_runtime_only_sections() {
+        let err = reject_runtime_only_config(&serde_json::json!({
+            "coyote": { "wsPort": 10000 }
+        }))
+        .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "server/coyote config changes require restart"
+        );
+
+        assert!(
+            reject_runtime_only_config(&serde_json::json!({
+                "safety": { "limitA": 100 }
+            }))
+            .is_ok()
         );
     }
 }
