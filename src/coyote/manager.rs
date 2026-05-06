@@ -4,6 +4,7 @@ use crate::coyote::session::CoyoteServerState;
 use crate::coyote::waveform::{self, DEFAULT_WAVEFORM_ID};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{broadcast, mpsc, watch};
 use tokio::task::JoinHandle;
 
@@ -85,12 +86,12 @@ struct PairedApp {
 
 struct CoyoteSharedState {
     paired: std::sync::Mutex<Option<PairedApp>>,
+    status_tx: watch::Sender<CoyoteStatus>,
 }
 
 pub struct CoyoteSharedHandle {
     shared: Arc<CoyoteSharedState>,
     bridge_id: String,
-    status_tx: watch::Sender<CoyoteStatus>,
     feedback_tx: broadcast::Sender<CoyoteFeedback>,
 }
 
@@ -110,7 +111,7 @@ impl CoyoteSharedHandle {
         if let Some(prev) = old.as_ref() {
             let _ = prev.close_tx.send(true);
         }
-        let _ = self.status_tx.send(CoyoteStatus {
+        let _ = self.shared.status_tx.send(CoyoteStatus {
             paired: true,
             ..CoyoteStatus::default()
         });
@@ -139,7 +140,7 @@ impl CoyoteSharedHandle {
                 limit_a: fb.limit_a,
                 limit_b: fb.limit_b,
             };
-            let _ = self.status_tx.send(status);
+            let _ = self.shared.status_tx.send(status);
             return;
         }
 
@@ -153,7 +154,7 @@ impl CoyoteSharedHandle {
         if guard.as_ref().is_some_and(|p| p.client_id == client_id) {
             *guard = None;
             drop(guard);
-            let _ = self.status_tx.send(CoyoteStatus::default());
+            let _ = self.shared.status_tx.send(CoyoteStatus::default());
         }
     }
 }
@@ -176,12 +177,12 @@ impl CoyoteManager {
 
         let shared = Arc::new(CoyoteSharedState {
             paired: std::sync::Mutex::new(None),
+            status_tx: status_tx.clone(),
         });
 
         let shared_handle = Arc::new(CoyoteSharedHandle {
             shared: shared.clone(),
             bridge_id: bridge_id.clone(),
-            status_tx,
             feedback_tx: feedback_tx.clone(),
         });
 
@@ -219,7 +220,7 @@ impl CoyoteManager {
                 cmd = self.cmd_rx.recv() => {
                     match cmd {
                         Some(CoyoteCommand::SendStrength { channel, mode, value }) => {
-                            self.send_strength(channel, mode, value).await;
+                            self.send_strength(channel, mode, value);
                         }
                         Some(CoyoteCommand::SelectWaveform { channel, waveform_id }) => {
                             self.select_waveform(channel, waveform_id).await;
@@ -241,27 +242,26 @@ impl CoyoteManager {
                     }
                 }
                 _ = heartbeat.tick() => {
-                    self.send_heartbeat().await;
+                    self.send_heartbeat();
                 }
             }
         }
     }
 
-    async fn send_strength(&self, channel: Channel, mode: u8, value: u8) {
+    fn send_strength(&self, channel: Channel, mode: u8, value: u8) {
         let ch_num = match channel {
             Channel::A => 1,
             Channel::B => 2,
         };
-        self.send_app_command(&format!("strength-{ch_num}+{mode}+{value}"))
-            .await;
+        self.send_app_command(&format!("strength-{ch_num}+{mode}+{value}"));
     }
 
-    async fn send_clear(&self, channel: Channel) {
+    fn send_clear(&self, channel: Channel) {
         let ch_num = match channel {
             Channel::A => 1,
             Channel::B => 2,
         };
-        self.send_app_command(&format!("clear-{ch_num}")).await;
+        self.send_app_command(&format!("clear-{ch_num}"));
     }
 
     async fn select_waveform(&mut self, channel: Channel, waveform_id: String) {
@@ -308,14 +308,14 @@ impl CoyoteManager {
 
     async fn stop_waveform(&mut self, channel: Channel) {
         self.abort_waveform(channel);
-        self.send_clear(channel).await;
+        self.send_clear(channel);
         self.emit_waveform_status();
     }
 
     async fn restart_waveform(&mut self, channel: Channel) {
         let had_running = self.abort_waveform(channel);
         if had_running {
-            self.send_clear(channel).await;
+            self.send_clear(channel);
             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
         }
         self.start_waveform(channel);
@@ -344,12 +344,12 @@ impl CoyoteManager {
 
         let handle = tokio::spawn(async move {
             loop {
-                let Some((tx, app_id)) = snapshot_paired(&shared) else {
+                let Some((tx, app_id, close_tx)) = snapshot_paired(&shared) else {
                     tokio::time::sleep(interval).await;
                     continue;
                 };
                 let msg = build_message("msg", &bridge_id, &app_id, &command);
-                if tx.send(msg).await.is_err() {
+                if try_send_app(&shared, tx, app_id, close_tx, msg).is_err() {
                     tokio::time::sleep(interval).await;
                     continue;
                 }
@@ -363,23 +363,23 @@ impl CoyoteManager {
         });
     }
 
-    async fn send_heartbeat(&self) {
-        let Some((tx, app_id)) = self.snapshot_paired() else {
+    fn send_heartbeat(&self) {
+        let Some((tx, app_id, close_tx)) = self.snapshot_paired() else {
             return;
         };
         let msg = build_heartbeat(&app_id, &self.bridge_id);
-        let _ = tx.send(msg).await;
+        let _ = try_send_app(&self.shared, tx, app_id, close_tx, msg);
     }
 
-    async fn send_app_command(&self, command: &str) {
-        let Some((tx, app_id)) = self.snapshot_paired() else {
+    fn send_app_command(&self, command: &str) {
+        let Some((tx, app_id, close_tx)) = self.snapshot_paired() else {
             return;
         };
         let msg = build_message("msg", &self.bridge_id, &app_id, command);
-        let _ = tx.send(msg).await;
+        let _ = try_send_app(&self.shared, tx, app_id, close_tx, msg);
     }
 
-    fn snapshot_paired(&self) -> Option<(mpsc::Sender<String>, String)> {
+    fn snapshot_paired(&self) -> Option<(mpsc::Sender<String>, String, watch::Sender<bool>)> {
         snapshot_paired(&self.shared)
     }
 
@@ -391,13 +391,52 @@ impl CoyoteManager {
     }
 }
 
-fn snapshot_paired(shared: &Arc<CoyoteSharedState>) -> Option<(mpsc::Sender<String>, String)> {
+fn snapshot_paired(
+    shared: &Arc<CoyoteSharedState>,
+) -> Option<(mpsc::Sender<String>, String, watch::Sender<bool>)> {
     shared
         .paired
         .lock()
         .unwrap()
         .as_ref()
-        .map(|p| (p.tx.clone(), p.client_id.clone()))
+        .map(|p| (p.tx.clone(), p.client_id.clone(), p.close_tx.clone()))
+}
+
+fn try_send_app(
+    shared: &Arc<CoyoteSharedState>,
+    tx: mpsc::Sender<String>,
+    client_id: String,
+    close_tx: watch::Sender<bool>,
+    msg: String,
+) -> Result<(), TrySendError<String>> {
+    match tx.try_send(msg) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            disconnect_paired(shared, &client_id, close_tx);
+            Err(err)
+        }
+    }
+}
+
+fn disconnect_paired(
+    shared: &Arc<CoyoteSharedState>,
+    client_id: &str,
+    close_tx: watch::Sender<bool>,
+) {
+    let disconnected = {
+        let mut guard = shared.paired.lock().unwrap();
+        if guard.as_ref().is_some_and(|p| p.client_id == client_id) {
+            *guard = None;
+            true
+        } else {
+            false
+        }
+    };
+
+    if disconnected {
+        let _ = close_tx.send(true);
+        let _ = shared.status_tx.send(CoyoteStatus::default());
+    }
 }
 
 #[derive(Default)]
@@ -455,7 +494,7 @@ mod tests {
             .server_state
             .shared
             .register_app("app-id".into(), app_tx, close_tx);
-        manager.send_heartbeat().await;
+        manager.send_heartbeat();
 
         let msg = app_rx.recv().await.unwrap();
         let parsed = parse_message(&msg).unwrap();
@@ -463,5 +502,23 @@ mod tests {
         assert_eq!(parsed.client_id, "app-id");
         assert_eq!(parsed.target_id, manager.bridge_id);
         assert_eq!(parsed.message, ERR_SUCCESS);
+    }
+
+    #[tokio::test]
+    async fn full_app_queue_disconnects_without_waiting() {
+        let (manager, handle) = CoyoteManager::new();
+        let (app_tx, _app_rx) = mpsc::channel(1);
+        let (close_tx, mut close_rx) = watch::channel(false);
+
+        app_tx.try_send("queued".into()).unwrap();
+        handle
+            .server_state
+            .shared
+            .register_app("app-id".into(), app_tx, close_tx);
+
+        manager.send_app_command("clear-1");
+
+        assert!(*close_rx.borrow_and_update());
+        assert!(!handle.status.borrow().paired);
     }
 }
