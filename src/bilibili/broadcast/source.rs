@@ -1,6 +1,7 @@
 use crate::bilibili::SourceStartResult;
 use crate::bilibili::broadcast::parser::parse_broadcast_gift;
 use crate::bilibili::broadcast::wbi::fetch_danmu_info;
+use crate::bilibili::http_client::HyperHttpClient;
 use crate::bilibili::live_socket::{LiveSocketOptions, LiveSocketStatus, run_live_socket};
 use crate::config::ConfigHandle;
 use crate::config::types::GiftEvent;
@@ -12,7 +13,7 @@ pub struct BroadcastSource {
     config: ConfigHandle,
     gift_tx: mpsc::Sender<GiftEvent>,
     cancel: CancellationToken,
-    http: reqwest::Client,
+    http: HyperHttpClient,
 }
 
 impl BroadcastSource {
@@ -21,7 +22,7 @@ impl BroadcastSource {
             config,
             gift_tx,
             cancel: CancellationToken::new(),
-            http: reqwest::Client::new(),
+            http: HyperHttpClient::new(),
         }
     }
 

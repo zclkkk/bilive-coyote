@@ -1,4 +1,7 @@
 use md5::{Digest, Md5};
+use serde::de::DeserializeOwned;
+
+use crate::bilibili::http_client::{HttpError, HyperHttpClient, empty_body, uri};
 
 const MIXIN_KEY_ENC_TAB: [usize; 64] = [
     46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29,
@@ -95,40 +98,44 @@ struct HostEntry {
     host: String,
 }
 
-async fn api_get<T: for<'de> serde::Deserialize<'de>>(
-    client: &reqwest::Client,
+async fn api_get<T: DeserializeOwned>(
+    client: &HyperHttpClient,
     url: &str,
-    headers: Vec<(&str, &str)>,
-) -> Result<T, reqwest::Error> {
-    let mut req = client.get(url).header("User-Agent", UA);
+    headers: &[(&str, &str)],
+) -> Result<T, HttpError> {
+    let mut req = hyper::Request::builder()
+        .method(hyper::Method::GET)
+        .uri(uri(url)?)
+        .header("User-Agent", UA);
     for (key, value) in headers {
-        req = req.header(key, value);
+        req = req.header(*key, *value);
     }
-    req.send().await?.json().await
+    let body = client.send(req.body(empty_body())?).await?;
+    Ok(serde_json::from_slice(&body)?)
 }
 
-async fn get_buvid3(client: &reqwest::Client) -> Result<String, reqwest::Error> {
+async fn get_buvid3(client: &HyperHttpClient) -> Result<String, HttpError> {
     let resp: BiliResponse<SpiData> = api_get(
         client,
         "https://api.bilibili.com/x/frontend/finger/spi",
-        vec![],
+        &[],
     )
     .await?;
     Ok(resp.data.map(|d| d.b_3).unwrap_or_default())
 }
 
-async fn resolve_room_id(client: &reqwest::Client, room_id: u64) -> Result<u64, reqwest::Error> {
+async fn resolve_room_id(client: &HyperHttpClient, room_id: u64) -> Result<u64, HttpError> {
     let resp: BiliResponse<RoomInitData> = api_get(
         client,
         &format!("https://api.live.bilibili.com/room/v1/Room/mobileRoomInit?id={room_id}"),
-        vec![],
+        &[],
     )
     .await?;
     Ok(resp.data.map(|d| d.room_id).unwrap_or(room_id))
 }
 
-pub async fn fetch_danmu_info(
-    client: &reqwest::Client,
+pub(super) async fn fetch_danmu_info(
+    client: &HyperHttpClient,
     room_id: u64,
 ) -> Result<(String, Vec<String>, u64), String> {
     let buvid3 = get_buvid3(client)
@@ -141,7 +148,7 @@ pub async fn fetch_danmu_info(
     let nav: BiliResponse<NavData> = api_get(
         client,
         "https://api.bilibili.com/x/web-interface/nav",
-        vec![("Cookie", &format!("buvid3={buvid3}"))],
+        &[("Cookie", &format!("buvid3={buvid3}"))],
     )
     .await
     .map_err(|e| format!("nav failed: {e}"))?;
@@ -167,7 +174,7 @@ pub async fn fetch_danmu_info(
     let danmu: BiliResponse<DanmuInfoData> = api_get(
         client,
         &format!("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo?{signed}"),
-        vec![
+        &[
             ("Referer", "https://live.bilibili.com/"),
             ("Cookie", &format!("buvid3={buvid3}")),
         ],

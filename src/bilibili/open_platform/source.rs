@@ -1,15 +1,31 @@
 use crate::bilibili::SourceStartResult;
+use crate::bilibili::http_client::{HttpBody, HttpError, HyperHttpClient, json_body, uri};
 use crate::bilibili::live_socket::{LiveSocketOptions, LiveSocketStatus, run_live_socket};
 use crate::bilibili::open_platform::parser::parse_open_platform_gift;
 use crate::bilibili::open_platform::signer::sign_open_platform_request;
 use crate::config::types::GiftEvent;
 use crate::config::{ConfigHandle, RuntimeStateStore};
+use hyper::{Method, Request};
 use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 const BASE_URL: &str = "https://live-open.biliapi.com";
+
+fn signed_json_request(
+    url: &str,
+    params: &serde_json::Value,
+    app_key: &str,
+    app_secret: &str,
+) -> Result<Request<HttpBody>, HttpError> {
+    let headers = sign_open_platform_request(params, app_key, app_secret);
+    let mut req = Request::builder().method(Method::POST).uri(uri(url)?);
+    for (key, value) in &headers {
+        req = req.header(key.as_str(), value.as_str());
+    }
+    Ok(req.body(json_body(params)?)?)
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -60,7 +76,7 @@ pub struct OpenPlatformSource {
     gift_tx: mpsc::Sender<GiftEvent>,
     active_game: Option<ActiveGame>,
     cancel: CancellationToken,
-    http: reqwest::Client,
+    http: HyperHttpClient,
 }
 
 impl OpenPlatformSource {
@@ -75,7 +91,7 @@ impl OpenPlatformSource {
             gift_tx,
             active_game: None,
             cancel: CancellationToken::new(),
-            http: reqwest::Client::new(),
+            http: HyperHttpClient::new(),
         }
     }
 
@@ -158,18 +174,12 @@ impl OpenPlatformSource {
         app_secret: &str,
         path: &str,
         params: &serde_json::Value,
-    ) -> Result<OpenPlatformResponse, reqwest::Error> {
-        let headers = sign_open_platform_request(params, app_key, app_secret);
-
-        let mut req = self.http.post(format!("{BASE_URL}{path}"));
-        for (key, value) in headers {
-            req = req.header(key, value);
-        }
-        req = req.json(params);
-
+    ) -> Result<OpenPlatformResponse, HttpError> {
+        let url = format!("{BASE_URL}{path}");
         info!("[Bilibili/OpenPlatform] POST {path}");
-        let resp = req.send().await?;
-        let data: OpenPlatformResponse = resp.json().await?;
+        let req = signed_json_request(&url, params, app_key, app_secret)?;
+        let body = self.http.send(req).await?;
+        let data: OpenPlatformResponse = serde_json::from_slice(&body)?;
         info!(
             "[Bilibili/OpenPlatform] Response {path}: code={}",
             data.code
@@ -309,13 +319,17 @@ impl OpenPlatformSource {
                     _ = interval.tick() => {}
                 }
                 let params = serde_json::json!({"game_id": &game_id_for_hb});
-                let headers = sign_open_platform_request(&params, &app_key, &app_secret);
-                let mut req = hb_http.post(format!("{BASE_URL}/v2/app/heartbeat"));
-                for (key, value) in headers {
-                    req = req.header(key, value);
-                }
-                req = req.json(&params);
-                if let Err(e) = req.send().await {
+                let req = signed_json_request(
+                    &format!("{BASE_URL}/v2/app/heartbeat"),
+                    &params,
+                    &app_key,
+                    &app_secret,
+                );
+                let result = match req {
+                    Ok(req) => hb_http.send(req).await.map(|_| ()),
+                    Err(e) => Err(e),
+                };
+                if let Err(e) = result {
                     warn!("[Bilibili/OpenPlatform] Heartbeat error: {e}");
                 }
             }

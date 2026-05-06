@@ -1,4 +1,5 @@
 pub mod broadcast;
+mod http_client;
 pub mod live_socket;
 pub mod open_platform;
 
