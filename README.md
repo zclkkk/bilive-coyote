@@ -28,6 +28,29 @@ http://localhost:3000
 
 用 DG-LAB APP 的 Socket 功能扫描面板二维码完成配对。
 
+## Broadcast 登录 JSON
+
+Broadcast 可以只填房间号启动；如果游客态收不到礼物 `cmd`，在控制面板粘贴 BiliTV 登录 JSON。这份 JSON 可以用 biliupR 生成。
+
+1. 打开 [biliup Releases](https://github.com/biliup/biliup/releases/latest)。
+2. 下载与你系统匹配的 biliupR 压缩包并解压。
+3. 在解压目录运行登录命令：
+
+```bash
+./biliup login
+```
+
+Windows PowerShell：
+
+```powershell
+.\biliup.exe login
+```
+
+4. 按终端提示完成登录。biliupR 默认会在当前目录生成 `cookies.json`。
+5. 打开 `cookies.json`，复制完整 JSON 到控制面板的 `BiliTV 登录 JSON`，填写房间号后开始监听。
+
+`cookies.json` 等同登录凭据，不要提交或分享；控制面板只把它用于本次 Broadcast 启动，不写入配置文件。
+
 ## 文档
 
 - [安装与运行](docs/setup.md)

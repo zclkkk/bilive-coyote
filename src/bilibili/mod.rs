@@ -28,6 +28,8 @@ pub enum BilibiliStart {
     Broadcast {
         #[serde(default)]
         room_id: Option<u64>,
+        #[serde(default)]
+        login_json: Option<String>,
     },
 }
 
@@ -42,6 +44,7 @@ impl From<BilibiliStartInput> for BilibiliStart {
             },
             BilibiliSourceType::Broadcast => BilibiliStart::Broadcast {
                 room_id: input.room_id,
+                login_json: input.login_json,
             },
         }
     }
@@ -176,7 +179,10 @@ impl BilibiliManager {
                     .start(app_key, app_secret, code, app_id)
                     .await
             }
-            BilibiliStart::Broadcast { room_id } => {
+            BilibiliStart::Broadcast {
+                room_id,
+                login_json,
+            } => {
                 self.current_status = BilibiliStatus {
                     source: BilibiliSourceType::Broadcast,
                     connected: false,
@@ -184,7 +190,7 @@ impl BilibiliManager {
                     game_id: None,
                     error: None,
                 };
-                self.broadcast.start(room_id).await
+                self.broadcast.start(room_id, login_json).await
             }
         };
 

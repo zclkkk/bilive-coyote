@@ -102,7 +102,7 @@
         <label>数据源</label>
         <select id="source-type">
           <option value="open-platform">开放平台 (需要 AppKey)</option>
-          <option value="broadcast">Broadcast (仅需房间号)</option>
+          <option value="broadcast">Broadcast (房间号 + 可选 BiliTV 登录 JSON)</option>
         </select>
       </div>
       <div id="op-fields">
@@ -127,6 +127,11 @@
         <div class="form-group">
           <label>房间号</label>
           <input id="roomId" type="number" placeholder="B站直播间房间号">
+        </div>
+        <div class="form-group">
+          <label>BiliTV 登录 JSON</label>
+          <textarea id="broadcastLoginJson" rows="4" placeholder="粘贴 BiliTV 登录 JSON"></textarea>
+          <p class="hint-text">需要登录态时粘贴；配置将不会落盘。</p>
         </div>
       </div>
       <div class="btn-row">

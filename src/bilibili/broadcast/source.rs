@@ -1,6 +1,6 @@
 use crate::bilibili::SourceStartResult;
 use crate::bilibili::broadcast::parser::parse_broadcast_gift;
-use crate::bilibili::broadcast::wbi::fetch_danmu_info;
+use crate::bilibili::broadcast::wbi::fetch_danmu_auth_info;
 use crate::bilibili::http_client::HyperHttpClient;
 use crate::bilibili::live_socket::{LiveSocketOptions, LiveSocketStatus, run_live_socket};
 use crate::config::ConfigHandle;
@@ -32,7 +32,11 @@ impl BroadcastSource {
         self.cancel.clone()
     }
 
-    pub async fn start(&mut self, room_id: Option<u64>) -> Result<SourceStartResult, String> {
+    pub async fn start(
+        &mut self,
+        room_id: Option<u64>,
+        login_json: Option<String>,
+    ) -> Result<SourceStartResult, String> {
         let cancel = self.reset_cancel();
 
         let cfg = self.config.lock().await;
@@ -43,17 +47,18 @@ impl BroadcastSource {
             return Err("roomId required".into());
         }
 
-        let (key, urls, long_room_id) = fetch_danmu_info(&self.http, requested).await?;
+        let danmu = fetch_danmu_auth_info(&self.http, requested, login_json).await?;
 
         let gift_tx = self.gift_tx.clone();
 
         let auth = serde_json::json!({
-            "uid": 0,
-            "roomid": long_room_id,
+            "uid": danmu.uid.unwrap_or(0),
+            "roomid": danmu.room_id,
             "protover": 3,
             "platform": "web",
             "type": 2,
-            "key": key,
+            "key": danmu.key,
+            "buvid": danmu.buvid3,
         });
 
         let (msg_tx, mut msg_rx) = mpsc::channel::<serde_json::Value>(256);
@@ -64,9 +69,9 @@ impl BroadcastSource {
             run_live_socket(
                 LiveSocketOptions {
                     label: "Bilibili/Broadcast".into(),
-                    urls,
+                    urls: danmu.urls,
                     auth,
-                    room_id: Some(long_room_id),
+                    room_id: Some(danmu.room_id),
                     on_message: msg_tx,
                     on_status: inner_status_tx,
                 },
@@ -91,7 +96,9 @@ impl BroadcastSource {
             .update(serde_json::json!({
                 "bilibili": {
                     "source": "broadcast",
-                    "broadcast": { "roomId": long_room_id }
+                    "broadcast": {
+                        "roomId": danmu.room_id
+                    }
                 }
             }))
             .await
@@ -99,11 +106,11 @@ impl BroadcastSource {
             warn!("[Bilibili/Broadcast] Failed to update config: {e}");
         }
 
-        info!("[Bilibili/Broadcast] Started! Room: {long_room_id}");
+        info!("[Bilibili/Broadcast] Started! Room: {}", danmu.room_id);
 
         Ok(SourceStartResult {
             status_rx: inner_status_rx,
-            room_id: Some(long_room_id),
+            room_id: Some(danmu.room_id),
             game_id: None,
         })
     }

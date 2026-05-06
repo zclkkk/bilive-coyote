@@ -31,9 +31,12 @@ Broadcast：
 ```json
 {
   "source": "broadcast",
-  "roomId": 123456
+  "roomId": 123456,
+  "loginJson": "{\"cookie_info\":{\"cookies\":[...]}}"
 }
 ```
+
+`loginJson` 可选，传入 BiliTV 登录 JSON 完整文本，用于本次 Broadcast 登录态鉴权。
 
 开放平台：
 

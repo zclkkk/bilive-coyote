@@ -46,7 +46,7 @@
 
 ## Broadcast
 
-Broadcast 适合低配置使用，只需要直播间房间号：
+Broadcast 适合低配置使用。配置文件只保存直播间房间号：
 
 ```json
 {
@@ -64,16 +64,21 @@ Broadcast 适合低配置使用，只需要直播间房间号：
 ```json
 {
   "source": "broadcast",
-  "roomId": 123456
+  "roomId": 123456,
+  "loginJson": "{\"cookie_info\":{\"cookies\":[...]}}"
 }
 ```
+
+`loginJson` 可选，内容是 BiliTV 登录 JSON 完整文本。它只用于本次 Broadcast 启动，不写入配置文件；如果游客态收不到礼物 `cmd`，再传入这个字段。
 
 内部流程：
 
 1. 获取直播间真实 room id。
-2. 连接 B 站直播 WebSocket。
-3. 解析 `SEND_GIFT`。
-4. 归一成 `GiftEvent`。
+2. 如果传入 `loginJson`，从 `cookie_info.cookies` 提取登录态 cookie。
+3. 获取 WBI key 并签名 `getDanmuInfo`。
+4. 使用 `uid`、`buvid` 和弹幕 key 鉴权连接 B 站直播 WebSocket。
+5. 解析 `SEND_GIFT`。
+6. 归一成 `GiftEvent`。
 
 ## GiftEvent
 

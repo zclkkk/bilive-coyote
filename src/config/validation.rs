@@ -117,6 +117,8 @@ pub struct BilibiliStartInput {
     pub app_id: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub room_id: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub login_json: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -134,6 +136,8 @@ struct BilibiliStartWire {
     app_id: Option<u64>,
     #[serde(default)]
     room_id: Option<u64>,
+    #[serde(default)]
+    login_json: Option<String>,
 }
 
 pub fn parse_bilibili_start(
@@ -154,6 +158,7 @@ pub fn parse_bilibili_start(
         code: wire.code,
         app_id: wire.app_id,
         room_id: wire.room_id,
+        login_json: wire.login_json,
     })
 }
 

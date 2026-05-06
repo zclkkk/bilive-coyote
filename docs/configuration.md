@@ -65,6 +65,8 @@ Broadcast 配置：
 | --- | --- |
 | `roomId` | 直播间房间号 |
 
+BiliTV 登录 JSON 是 Broadcast 启动参数 `loginJson`，不写入配置文件。
+
 ## Coyote 和服务配置
 
 | 字段 | 默认值 | 说明 |

@@ -349,7 +349,8 @@ function buildStartParams(source) {
     alert("请填写房间号");
     return null;
   }
-  return { source, roomId };
+  const loginJson = $("#broadcastLoginJson").value.trim();
+  return loginJson ? { source, roomId, loginJson } : { source, roomId };
 }
 
 function setupWSEvents() {
