@@ -42,7 +42,7 @@ pub fn parse_packets(buf: &[u8]) -> Vec<ParsedPacket> {
         let protover = u16::from_be_bytes(buf[offset + 6..offset + 8].try_into().unwrap());
         let op = u32::from_be_bytes(buf[offset + 8..offset + 12].try_into().unwrap());
 
-        if total_len > buf.len() - offset || header_len != HEADER_LEN {
+        if total_len < header_len || total_len > buf.len() - offset || header_len != HEADER_LEN {
             break;
         }
 
@@ -116,6 +116,16 @@ mod tests {
         assert_eq!(parsed.len(), 2);
         assert_eq!(parsed[0].op, OP_CONNECT_SUCCESS);
         assert_eq!(parsed[1].op, OP_MESSAGE);
+    }
+
+    #[test]
+    fn test_parse_rejects_packet_shorter_than_header() {
+        let mut packet = vec![0u8; HEADER_LEN];
+        packet[0..4].copy_from_slice(&8u32.to_be_bytes());
+        packet[4..6].copy_from_slice(&(HEADER_LEN as u16).to_be_bytes());
+
+        let parsed = parse_packets(&packet);
+        assert!(parsed.is_empty());
     }
 
     #[test]
