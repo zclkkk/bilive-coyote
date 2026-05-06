@@ -47,12 +47,18 @@ struct AuthBody {
     uid: Option<u64>,
 }
 
+struct ActiveGame {
+    game_id: String,
+    app_id: u64,
+    app_key: String,
+    app_secret: String,
+}
+
 pub struct OpenPlatformSource {
     config: ConfigHandle,
     state: RuntimeStateStore,
     gift_tx: mpsc::Sender<GiftEvent>,
-    app_id: u64,
-    game_id: Option<String>,
+    active_game: Option<ActiveGame>,
     cancel: CancellationToken,
     http: reqwest::Client,
 }
@@ -67,8 +73,7 @@ impl OpenPlatformSource {
             config,
             state,
             gift_tx,
-            app_id: 0,
-            game_id: None,
+            active_game: None,
             cancel: CancellationToken::new(),
             http: reqwest::Client::new(),
         }
@@ -100,8 +105,6 @@ impl OpenPlatformSource {
         if app_key.is_empty() || app_secret.is_empty() || code.is_empty() || app_id == 0 {
             return Err("code, appId, appKey and appSecret required".into());
         }
-
-        self.app_id = app_id;
 
         self.clear_stale_game(&app_key, &app_secret, app_id).await;
 
@@ -138,15 +141,14 @@ impl OpenPlatformSource {
 
     pub async fn stop(&mut self) {
         self.cancel.cancel();
-        if let Some(game_id) = self.game_id.take() {
-            // Use the credentials currently saved in config to end the session.
-            let cfg = self.config.lock().await;
-            let creds = &cfg.get().bilibili.open_platform;
-            let app_key = creds.app_key.clone();
-            let app_secret = creds.app_secret.clone();
-            drop(cfg);
-            self.end_game(&app_key, &app_secret, &game_id, self.app_id)
-                .await;
+        if let Some(active) = self.active_game.take() {
+            self.end_game(
+                &active.app_key,
+                &active.app_secret,
+                &active.game_id,
+                active.app_id,
+            )
+            .await;
         }
     }
 
@@ -223,7 +225,12 @@ impl OpenPlatformSource {
         let auth: AuthBody = serde_json::from_str(&data.websocket_info.auth_body)
             .map_err(|e| format!("auth_body 格式错误: {e}"))?;
 
-        self.game_id = Some(data.game_info.game_id.clone());
+        self.active_game = Some(ActiveGame {
+            game_id: data.game_info.game_id.clone(),
+            app_id,
+            app_key: app_key.clone(),
+            app_secret: app_secret.clone(),
+        });
 
         if let Err(e) = self
             .state
@@ -324,5 +331,60 @@ impl OpenPlatformSource {
             room_id: auth.roomid,
             game_id: Some(data.game_info.game_id),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{ConfigHandle, ConfigStore};
+
+    fn temp_path(label: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "bilive-coyote-open-platform-{label}-{}.json",
+            uuid::Uuid::new_v4()
+        ))
+    }
+
+    #[tokio::test]
+    async fn start_success_keeps_active_credentials_snapshot() {
+        let config_path = temp_path("config");
+        let state_path = temp_path("state");
+        let config = ConfigHandle::new(ConfigStore::load_or_default(&config_path).await.unwrap());
+        let state = RuntimeStateStore::load_or_default(&state_path);
+        let (gift_tx, _) = mpsc::channel(1);
+        let mut source = OpenPlatformSource::new(config, state, gift_tx);
+
+        let cancel = CancellationToken::new();
+        let result = source
+            .handle_start_success(
+                StartData {
+                    game_info: GameInfo {
+                        game_id: "game-1".into(),
+                    },
+                    websocket_info: WebsocketInfo {
+                        wss_link: Vec::new(),
+                        auth_body: r#"{"key":"auth","roomid":1}"#.into(),
+                    },
+                },
+                "start-key".into(),
+                "start-secret".into(),
+                "code".into(),
+                42,
+                cancel.clone(),
+            )
+            .await
+            .unwrap();
+
+        let active = source.active_game.as_ref().unwrap();
+        assert_eq!(result.game_id.as_deref(), Some("game-1"));
+        assert_eq!(active.game_id, "game-1");
+        assert_eq!(active.app_id, 42);
+        assert_eq!(active.app_key, "start-key");
+        assert_eq!(active.app_secret, "start-secret");
+
+        cancel.cancel();
+        let _ = tokio::fs::remove_file(config_path).await;
+        let _ = tokio::fs::remove_file(state_path).await;
     }
 }
