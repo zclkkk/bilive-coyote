@@ -1,6 +1,6 @@
 use crate::config::types::{AppConfig, GiftRule, RuntimeState};
 use crate::config::validation::{ValidationError, validate_app_config, validate_rules};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::sync::watch;
 use tracing::error;
 
@@ -71,16 +71,20 @@ impl ConfigStore {
     }
 
     async fn persist_data(&self, data: &AppConfig) -> Result<(), ConfigError> {
-        let content = serde_json::to_string_pretty(data).map_err(ConfigError::Json)?;
-        let tmp_path = self.path.with_extension("tmp");
-        tokio::fs::write(tmp_path.as_path(), content.as_bytes())
-            .await
-            .map_err(ConfigError::Io)?;
-        tokio::fs::rename(tmp_path.as_path(), self.path.as_path())
-            .await
-            .map_err(ConfigError::Io)?;
-        Ok(())
+        atomic_write_json(self.path.as_path(), "tmp", data).await
     }
+}
+
+async fn atomic_write_json<T: serde::Serialize>(
+    path: &Path,
+    tmp_extension: &str,
+    data: &T,
+) -> Result<(), ConfigError> {
+    let content = serde_json::to_string_pretty(data)?;
+    let tmp_path = path.with_extension(tmp_extension);
+    tokio::fs::write(tmp_path.as_path(), content.as_bytes()).await?;
+    tokio::fs::rename(tmp_path.as_path(), path).await?;
+    Ok(())
 }
 
 fn deep_merge(base: &serde_json::Value, overlay: &serde_json::Value) -> serde_json::Value {
@@ -138,14 +142,6 @@ impl RuntimeStateStore {
 
     pub async fn set_open_platform_game_id(&mut self, value: String) -> Result<(), ConfigError> {
         self.data.open_platform_game_id = value;
-        let content = serde_json::to_string_pretty(&self.data).map_err(ConfigError::Json)?;
-        let tmp_path = self.path.with_extension("state.tmp");
-        tokio::fs::write(tmp_path.as_path(), content.as_bytes())
-            .await
-            .map_err(ConfigError::Io)?;
-        tokio::fs::rename(tmp_path.as_path(), self.path.as_path())
-            .await
-            .map_err(ConfigError::Io)?;
-        Ok(())
+        atomic_write_json(self.path.as_path(), "state.tmp", &self.data).await
     }
 }
