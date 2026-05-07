@@ -200,7 +200,7 @@ impl StrengthEngine {
                     entry.value = new_value;
                     entry.expiries.push(Expiry {
                         until: std::time::Instant::now()
-                            + std::time::Duration::from_secs(event.duration.unwrap_or(0)),
+                            + std::time::Duration::from_secs(event.duration),
                         delta: actual_delta,
                     });
                     self.send_coyote_strength(ch, new_value).await;

@@ -12,19 +12,6 @@ pub struct StrengthStatus {
     pub effective_limit_b: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StrengthChangeEvent {
-    pub channel: Channel,
-    pub delta: i32,
-    pub source: StrengthSource,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gift_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub uname: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub duration: Option<u64>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum StrengthSource {

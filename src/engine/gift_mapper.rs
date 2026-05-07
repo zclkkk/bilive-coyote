@@ -1,5 +1,12 @@
 use crate::config::types::{Channel, CoinType, GiftEvent, GiftRule, RuleChannel};
-use crate::engine::types::{GiftLogEvent, StrengthChangeEvent, StrengthSource};
+use crate::engine::types::GiftLogEvent;
+
+#[derive(Debug, Clone)]
+pub(super) struct RuleStrengthDelta {
+    pub(super) channel: Channel,
+    pub(super) delta: i32,
+    pub(super) duration: u64,
+}
 
 pub fn match_rule(rule: &GiftRule, gift: &GiftEvent) -> bool {
     if let Some(rule_gift_id) = rule.gift_id
@@ -16,21 +23,18 @@ pub fn match_rule(rule: &GiftRule, gift: &GiftEvent) -> bool {
     true
 }
 
-pub fn apply_rule(rule: &GiftRule, gift: &GiftEvent) -> (Vec<StrengthChangeEvent>, String) {
+pub(super) fn apply_rule(rule: &GiftRule, gift: &GiftEvent) -> (Vec<RuleStrengthDelta>, String) {
     let channels = rule_channels(rule.channel);
     let raw_delta = (rule.strength_add as u64).saturating_mul(gift.num as u64);
     let delta_i32 = i32::try_from(raw_delta).unwrap_or(i32::MAX);
 
-    let events: Vec<StrengthChangeEvent> = channels
+    let events: Vec<RuleStrengthDelta> = channels
         .iter()
         .filter(|_| raw_delta > 0)
-        .map(|&ch| StrengthChangeEvent {
+        .map(|&ch| RuleStrengthDelta {
             channel: ch,
             delta: delta_i32,
-            source: StrengthSource::Gift,
-            gift_name: Some(gift.gift_name.clone()),
-            uname: Some(gift.uname.clone()),
-            duration: Some(rule.duration),
+            duration: rule.duration,
         })
         .collect();
 
