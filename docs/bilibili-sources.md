@@ -25,6 +25,15 @@
 }
 ```
 
+字段来源：
+
+| 控制面板字段 | 获取位置 |
+| --- | --- |
+| `App ID` | [B 站直播开放平台](https://open-live.bilibili.com/open-manage) -> 自己的项目 -> `项目ID` |
+| `AppKey` | 开放平台个人资料 -> `access_key_id` |
+| `AppSecret` | 开放平台个人资料 -> `access_key_secred` |
+| `主播身份码` | [B 站直播中心](https://link.bilibili.com/p/center/index) -> `我的直播间` -> `开播设置` -> `身份码` |
+
 启动 API 参数：
 
 ```json

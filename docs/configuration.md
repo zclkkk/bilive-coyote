@@ -59,6 +59,8 @@
 | `code` | 主播身份码 |
 | `appId` | 应用 ID |
 
+`appId` 来自开放平台项目页的 `项目ID`；`appKey` 和 `appSecret` 分别对应开放平台个人资料里的 `access_key_id` 和 `access_key_secred`；`code` 来自直播中心 `我的直播间` -> `开播设置` 的 `身份码`。
+
 Broadcast 配置：
 
 | 字段 | 说明 |

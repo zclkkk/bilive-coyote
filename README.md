@@ -28,6 +28,17 @@ http://localhost:3000
 
 用 DG-LAB APP 的 Socket 功能扫描面板二维码完成配对。
 
+## 开放平台配置
+
+开放平台适合正式接入，需要在控制面板填写 `App ID`、`AppKey`、`AppSecret` 和 `主播身份码`。
+
+1. 打开 [B 站直播开放平台](https://open-live.bilibili.com/open-manage)。
+2. 点进自己的项目；如果没有项目，先创建一个。
+3. 在项目页找到 `项目ID`，填到控制面板的 `App ID`。
+4. 在开放平台的个人资料里找到 `access_key_id` 和 `access_key_secred`，分别填到 `AppKey` 和 `AppSecret`。
+5. 打开 [B 站直播中心](https://link.bilibili.com/p/center/index)，进入 `我的直播间` -> `开播设置`。
+6. 复制 `身份码`，填到控制面板的 `主播身份码`。
+
 ## Broadcast 登录 JSON
 
 Broadcast 可以只填房间号启动；如果游客态收不到礼物 `cmd`，在控制面板粘贴 BiliTV 登录 JSON。这份 JSON 可以用 biliupR 生成。
