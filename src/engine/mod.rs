@@ -419,6 +419,10 @@ impl StrengthEngine {
             effective_limit_a: self.effective_limit(Channel::A),
             effective_limit_b: self.effective_limit(Channel::B),
         };
-        let _ = self.status_tx.send(status);
+        let _ = self.status_tx.send(status.clone());
+        let _ = self.panel_tx.send(PanelEvent {
+            event_type: "strength:status".into(),
+            data: serde_json::to_value(status).expect("StrengthStatus serializes"),
+        });
     }
 }

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bilive-Coyote OBS Widget</title>
+  <link rel="stylesheet" href="./css/obs.css">
+</head>
+<body>
+  <main class="obs-stage" aria-label="Bilive-Coyote OBS 小组件">
+    <section class="widget" id="widget">
+      <svg class="ring" viewBox="0 0 220 220" role="img" aria-label="A/B 通道强度">
+        <circle class="ring-track" cx="110" cy="110" r="90"></circle>
+        <circle id="ring-b" class="ring-meter ring-b" cx="110" cy="110" r="90"></circle>
+        <circle id="ring-a" class="ring-meter ring-a" cx="110" cy="110" r="90"></circle>
+      </svg>
+      <div class="readout">
+        <div class="strength-line">
+          <span id="value-a" class="value-a">0</span>
+          <span class="dash">-</span>
+          <span id="value-b" class="value-b">0</span>
+        </div>
+        <div class="max-line">
+          <span>MAX:</span><span id="max-value" class="max-value">200</span>
+        </div>
+        <div id="status-mark" class="status-mark">--</div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/obs-widget.js"></script>
+</body>
+</html>

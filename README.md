@@ -62,6 +62,27 @@ Windows PowerShell：
 
 `cookies.json` 等同登录凭据，不要提交或分享；控制面板只把它用于本次 Broadcast 启动，不写入配置文件。
 
+## OBS 小组件
+
+启动服务后，在 OBS 添加 `浏览器源`，URL 填：
+
+```txt
+http://localhost:3000/obs.html
+```
+
+小组件会显示 A/B 通道强度、当前有效上限和 Coyote 配对状态，背景透明，适合直接叠到直播画面上。
+
+OBS 浏览器源宽高建议和 `size` 一致；如果 URL 使用 `size=480`，浏览器源宽高也设为 `480 x 480`。
+
+可选参数：
+
+```txt
+http://localhost:3000/obs.html?size=360&theme=light
+```
+
+- `size`：圆形组件尺寸，默认 `360`，内部文字和阴影会等比缩放。
+- `theme`：`light` 或 `dark`，默认 `light`。
+
 ## 文档
 
 - [安装与运行](docs/setup.md)
