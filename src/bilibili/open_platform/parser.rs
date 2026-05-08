@@ -1,4 +1,4 @@
-use crate::config::types::GiftEvent;
+use crate::config::types::{GiftCoinType, GiftEvent};
 
 const CMD_OPEN_PLATFORM_GIFT: &str = "LIVE_OPEN_PLATFORM_SEND_GIFT";
 
@@ -41,7 +41,11 @@ pub fn parse_open_platform_gift(message: &serde_json::Value) -> Option<GiftEvent
     Some(GiftEvent {
         gift_id: data.gift_id.or(data.giftId)?,
         gift_name,
-        coin_type: if paid { "gold".into() } else { "silver".into() },
+        coin_type: if paid {
+            GiftCoinType::Gold
+        } else {
+            GiftCoinType::Silver
+        },
         total_coin: data.price.or(data.total_coin)?,
         num: data.gift_num.or(data.num)?,
         uid: data.uid?,
@@ -72,7 +76,7 @@ mod tests {
         let gift = parse_open_platform_gift(&msg).unwrap();
         assert_eq!(gift.gift_id, 123);
         assert_eq!(gift.gift_name, "test");
-        assert_eq!(gift.coin_type, "gold");
+        assert_eq!(gift.coin_type, GiftCoinType::Gold);
         assert_eq!(gift.total_coin, 100);
         assert_eq!(gift.num, 2);
         assert_eq!(gift.uid, 456);
@@ -109,7 +113,7 @@ mod tests {
         let gift = parse_open_platform_gift(&msg).unwrap();
         assert_eq!(gift.gift_id, 999);
         assert_eq!(gift.gift_name, "alt");
-        assert_eq!(gift.coin_type, "silver");
+        assert_eq!(gift.coin_type, GiftCoinType::Silver);
         assert_eq!(gift.total_coin, 50);
         assert_eq!(gift.num, 3);
         assert_eq!(gift.uname, "altuser");

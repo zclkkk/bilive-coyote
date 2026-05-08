@@ -97,7 +97,7 @@ Broadcast 适合低配置使用。配置文件只保存直播间房间号：
 | --- | --- |
 | `giftId` | 礼物 ID |
 | `giftName` | 礼物名 |
-| `coinType` | `gold` / `silver` 等 |
+| `coinType` | `gold` / `silver` |
 | `totalCoin` | 总瓜子数 |
 | `num` | 数量 |
 | `uid` | 用户 ID |

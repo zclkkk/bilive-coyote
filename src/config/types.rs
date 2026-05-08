@@ -2,10 +2,37 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub enum GiftCoinType {
+    Gold,
+    Silver,
+}
+
+impl GiftCoinType {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "gold" => Some(Self::Gold),
+            "silver" => Some(Self::Silver),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum CoinType {
     Gold,
     Silver,
     All,
+}
+
+impl CoinType {
+    pub fn matches_gift(self, gift_coin_type: GiftCoinType) -> bool {
+        match self {
+            Self::Gold => gift_coin_type == GiftCoinType::Gold,
+            Self::Silver => gift_coin_type == GiftCoinType::Silver,
+            Self::All => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -41,7 +68,7 @@ pub struct GiftRule {
 pub struct GiftEvent {
     pub gift_id: u64,
     pub gift_name: String,
-    pub coin_type: String,
+    pub coin_type: GiftCoinType,
     pub total_coin: u64,
     pub num: u32,
     pub uid: u64,

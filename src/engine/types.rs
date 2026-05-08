@@ -26,7 +26,7 @@ pub enum StrengthSource {
 pub struct GiftLogEvent {
     pub gift_id: u64,
     pub gift_name: String,
-    pub coin_type: String,
+    pub coin_type: GiftCoinType,
     pub total_coin: u64,
     pub num: u32,
     pub uid: u64,

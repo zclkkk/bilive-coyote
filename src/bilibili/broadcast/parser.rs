@@ -1,4 +1,4 @@
-use crate::config::types::GiftEvent;
+use crate::config::types::{GiftCoinType, GiftEvent};
 
 const CMD_BROADCAST_GIFT: &str = "SEND_GIFT";
 
@@ -38,7 +38,7 @@ pub fn parse_broadcast_gift(message: &serde_json::Value) -> Option<GiftEvent> {
 
     let d = msg.data?;
     let gift_name = d.giftName.filter(|s| !s.is_empty())?;
-    let coin_type = d.coin_type.filter(|s| !s.is_empty())?;
+    let coin_type = GiftCoinType::parse(d.coin_type.as_deref()?)?;
     let uname = d.uname.filter(|s| !s.is_empty())?;
 
     Some(GiftEvent {
@@ -75,7 +75,7 @@ mod tests {
         let gift = parse_broadcast_gift(&msg).unwrap();
         assert_eq!(gift.gift_id, 123);
         assert_eq!(gift.gift_name, "test");
-        assert_eq!(gift.coin_type, "gold");
+        assert_eq!(gift.coin_type, GiftCoinType::Gold);
         assert_eq!(gift.total_coin, 100);
         assert_eq!(gift.num, 2);
     }
@@ -99,6 +99,24 @@ mod tests {
             "data": {
                 "giftId": 123,
                 "giftName": "test"
+            }
+        });
+        assert!(parse_broadcast_gift(&msg).is_none());
+    }
+
+    #[test]
+    fn test_parse_gift_rejects_unknown_coin_type() {
+        let msg = serde_json::json!({
+            "cmd": "SEND_GIFT",
+            "data": {
+                "giftId": 123,
+                "giftName": "test",
+                "coin_type": "unknown",
+                "price": 100,
+                "num": 2,
+                "uid": 456,
+                "uname": "user",
+                "timestamp": 1700000000
             }
         });
         assert!(parse_broadcast_gift(&msg).is_none());

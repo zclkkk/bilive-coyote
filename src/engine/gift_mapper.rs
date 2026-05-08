@@ -1,4 +1,4 @@
-use crate::config::types::{Channel, CoinType, GiftEvent, GiftRule, RuleChannel};
+use crate::config::types::{Channel, GiftEvent, GiftRule, RuleChannel};
 use crate::engine::types::GiftLogEvent;
 
 #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ pub fn match_rule(rule: &GiftRule, gift: &GiftEvent) -> bool {
     if gift.gift_name != rule.gift_name {
         return false;
     }
-    if rule.coin_type != CoinType::All && rule.coin_type.as_str() != gift.coin_type {
+    if !rule.coin_type.matches_gift(gift.coin_type) {
         return false;
     }
     true
@@ -57,21 +57,11 @@ pub fn rule_channels(channel: RuleChannel) -> Vec<Channel> {
     }
 }
 
-impl CoinType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            CoinType::Gold => "gold",
-            CoinType::Silver => "silver",
-            CoinType::All => "all",
-        }
-    }
-}
-
 pub fn build_gift_log(gift: &GiftEvent, strength_delta: String) -> GiftLogEvent {
     GiftLogEvent {
         gift_id: gift.gift_id,
         gift_name: gift.gift_name.clone(),
-        coin_type: gift.coin_type.clone(),
+        coin_type: gift.coin_type,
         total_coin: gift.total_coin,
         num: gift.num,
         uid: gift.uid,
